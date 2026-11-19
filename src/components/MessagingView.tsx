@@ -54,20 +54,20 @@ export const MessagingView: React.FC<MessagingViewProps> = ({
     return (
       <section className="rounded-2xl border border-gray-200 bg-white p-10 text-center space-y-4">
         <MessageSquare className="w-8 h-8 mx-auto text-[#004F71]" />
-        <h1 className="text-xl font-black font-display text-[#111111]">
+        <h1 className="text-xl font-bold font-display text-[#111111]">
           Messagerie directe entre agents MTN MoMo
         </h1>
-        <p className="text-sm text-gray-600 max-w-md mx-auto">
-          Connectez-vous avec votre compte Google pour discuter en temps réel avec d'autres agents
-          MTN MoMo au Bénin et partager votre WhatsApp (+229) uniquement avec vos interlocuteurs.
+        <p className="text-sm text-gray-600 max-w-md mx-auto leading-relaxed">
+          Connectez-vous avec votre numéro (+229), votre adresse e-mail ou Google pour discuter en
+          temps réel avec les agents du Bénin et protéger votre WhatsApp.
         </p>
         <button
           type="button"
           onClick={onSignIn}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black font-display bg-[#FFCB05] text-[#111111] hover:bg-[#f2bd00] cursor-pointer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold font-display bg-[#FFCB05] text-[#111111] hover:bg-[#f2bd00] cursor-pointer"
         >
           <LogIn className="w-4 h-4" />
-          <span>Connexion Agent (Google)</span>
+          <span>Connexion / Créer un compte</span>
         </button>
       </section>
     );

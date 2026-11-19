@@ -24,7 +24,10 @@ service cloud.firestore {
     }
 
     function isVerifiedUser() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn() && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.phone_number != null
+      );
     }
 
     function isOwner(userId) {
@@ -79,7 +82,7 @@ service cloud.firestore {
         data.uid is string && data.uid == agentId && isValidId(data.uid) &&
         data.whatsapp is string && data.whatsapp.size() >= 8 && data.whatsapp.size() <= 20 &&
         data.whatsapp.matches('^\\+?229[0-9]{8,10}$') &&
-        data.email is string && data.email.size() >= 5 && data.email.size() <= 120 &&
+        data.email is string && data.email.size() <= 120 &&
         data.updatedAt is timestamp;
     }
 
@@ -92,7 +95,7 @@ service cloud.firestore {
         data.keys().hasOnly([
           'authorId', 'authorName', 'authorVerification', 'intent', 'liquidityType',
           'operator', 'amount', 'commune', 'quartier', 'details', 'status',
-          'createdAt', 'updatedAt'
+          'latitude', 'longitude', 'createdAt', 'updatedAt'
         ]) &&
         data.authorId is string && isValidId(data.authorId) &&
         data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60 &&
@@ -105,6 +108,14 @@ service cloud.firestore {
         data.quartier is string && data.quartier.size() >= 2 && data.quartier.size() <= 60 &&
         data.details is string && data.details.size() <= 300 &&
         data.status in ['active', 'matched', 'closed'] &&
+        (
+          (!('latitude' in data) && !('longitude' in data)) ||
+          (
+            'latitude' in data && 'longitude' in data &&
+            (data.latitude is int || data.latitude is float) && data.latitude >= -90 && data.latitude <= 90 &&
+            (data.longitude is int || data.longitude is float) && data.longitude >= -180 && data.longitude <= 180
+          )
+        ) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -234,6 +245,22 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    function isValidFavoriteAgent(data, agentId, favoriteUid) {
+      return data.keys().hasAll([
+          'ownerId', 'favoriteAgentId', 'businessName', 'commune', 'quartier', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId', 'favoriteAgentId', 'businessName', 'commune', 'quartier', 'createdAt'
+        ]) &&
+        data.ownerId is string && data.ownerId == agentId && isValidId(data.ownerId) &&
+        data.favoriteAgentId is string && data.favoriteAgentId == favoriteUid &&
+        isValidId(data.favoriteAgentId) && data.favoriteAgentId != agentId &&
+        data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 60 &&
+        data.commune is string && data.commune.size() >= 2 && data.commune.size() <= 50 &&
+        data.quartier is string && data.quartier.size() >= 2 && data.quartier.size() <= 60 &&
+        data.createdAt is timestamp;
+    }
+
     // 4. Collection Rules
     match /admins/{adminId} {
       allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
@@ -352,6 +379,19 @@ service cloud.firestore {
           incoming().diff(existing()).affectedKeys().hasOnly(['read']);
         allow delete: if isVerifiedUser() && isValidId(agentId) && isValidId(notifId) && isOwner(agentId);
       }
+
+      match /favorites/{favoriteUid} {
+        allow get: if isValidId(agentId) && isValidId(favoriteUid) && isOwner(agentId);
+        allow list: if isOwner(agentId) && existing().ownerId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isValidId(favoriteUid) &&
+          isOwner(agentId) &&
+          isValidFavoriteAgent(incoming(), agentId, favoriteUid) &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/agents_public/$(favoriteUid));
+        allow delete: if isVerifiedUser() && isValidId(agentId) && isValidId(favoriteUid) && isOwner(agentId);
+      }
     }
 
     match /listings/{listingId} {
@@ -385,7 +425,7 @@ service cloud.firestore {
             existing().status != 'closed' &&
             incoming().authorVerification == existing().authorVerification &&
             incoming().authorName == existing().authorName &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'details', 'liquidityType', 'updatedAt'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'details', 'liquidityType', 'latitude', 'longitude', 'updatedAt'])
           )
         );
       allow delete: if isVerifiedUser() &&

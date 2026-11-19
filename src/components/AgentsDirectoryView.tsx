@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BadgeCheck, Flag, MessageSquare, Search, Shield, UserCheck } from 'lucide-react';
+import { BadgeCheck, Flag, MessageSquare, Search, Shield, Star, UserCheck } from 'lucide-react';
 import { BENIN_COMMUNES, VERIFICATION_LABELS } from '../data/beninGeo';
 import { AgentPublic, VerificationLevel } from '../types';
 import { BeninFlag } from './MtnBrandMarks';
@@ -8,8 +8,11 @@ interface AgentsDirectoryViewProps {
   agents: AgentPublic[];
   loading: boolean;
   currentUid?: string;
+  favoriteIds: Set<string>;
+  favoriteBusyId?: string | null;
   onContactAgent: (agent: AgentPublic) => void;
   onReportAgent: (agent: AgentPublic) => void;
+  onToggleFavorite: (agent: AgentPublic) => Promise<void>;
   onOpenProfileModal: () => void;
 }
 
@@ -17,14 +20,18 @@ export const AgentsDirectoryView: React.FC<AgentsDirectoryViewProps> = ({
   agents,
   loading,
   currentUid,
+  favoriteIds,
+  favoriteBusyId,
   onContactAgent,
   onReportAgent,
+  onToggleFavorite,
   onOpenProfileModal,
 }) => {
   const [communeFilter, setCommuneFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [levelFilter, setLevelFilter] = useState<VerificationLevel | 'all'>('all');
   const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
+  const [onlyFavorites, setOnlyFavorites] = useState<boolean>(false);
 
   const filteredAgents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -33,6 +40,7 @@ export const AgentsDirectoryView: React.FC<AgentsDirectoryViewProps> = ({
       if (communeFilter && agent.commune !== communeFilter) return false;
       if (levelFilter !== 'all' && agent.verificationLevel !== levelFilter) return false;
       if (onlyAvailable && !agent.isAvailable) return false;
+      if (onlyFavorites && !favoriteIds.has(agent.uid)) return false;
       if (
         q &&
         !agent.businessName.toLowerCase().includes(q) &&
@@ -43,7 +51,7 @@ export const AgentsDirectoryView: React.FC<AgentsDirectoryViewProps> = ({
       }
       return true;
     });
-  }, [agents, communeFilter, levelFilter, onlyAvailable, searchQuery]);
+  }, [agents, communeFilter, favoriteIds, levelFilter, onlyAvailable, onlyFavorites, searchQuery]);
 
   const renderVerificationIcon = (level: VerificationLevel) => {
     if (level === 'certified') {
@@ -132,7 +140,7 @@ export const AgentsDirectoryView: React.FC<AgentsDirectoryViewProps> = ({
             </select>
           </div>
 
-          <div className="flex items-end pb-1">
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-2 pb-1">
             <label className="inline-flex items-center gap-2 text-sm font-medium text-[#111111] cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -140,7 +148,18 @@ export const AgentsDirectoryView: React.FC<AgentsDirectoryViewProps> = ({
                 onChange={(e) => setOnlyAvailable(e.target.checked)}
                 className="w-4 h-4 rounded border-gray-300"
               />
-              <span>Disponibles uniquement</span>
+              <span>Disponibles</span>
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm font-medium text-[#111111] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={onlyFavorites}
+                onChange={(e) => setOnlyFavorites(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <span>
+                Favoris (<span className="font-mono-num">{favoriteIds.size}</span>)
+              </span>
             </label>
           </div>
         </div>
@@ -173,6 +192,8 @@ export const AgentsDirectoryView: React.FC<AgentsDirectoryViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredAgents.map((agent) => {
             const isOwn = currentUid === agent.uid;
+            const isFavorite = favoriteIds.has(agent.uid);
+            const isFavBusy = favoriteBusyId === agent.uid;
             const verificationInfo = VERIFICATION_LABELS[agent.verificationLevel];
             return (
               <article
@@ -239,14 +260,36 @@ export const AgentsDirectoryView: React.FC<AgentsDirectoryViewProps> = ({
                         <MessageSquare className="w-3.5 h-3.5" />
                         <span>Contacter</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onReportAgent(agent)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-[#111111] hover:bg-gray-100 cursor-pointer"
-                      >
-                        <Flag className="w-3.5 h-3.5" />
-                        <span>Signaler</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={isFavBusy}
+                          aria-pressed={isFavorite}
+                          title={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                          onClick={() => void onToggleFavorite(agent)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors disabled:opacity-50 cursor-pointer ${
+                            isFavorite
+                              ? 'bg-[#FFFBEB] border-[#FFCB05] text-[#111111]'
+                              : 'bg-white border-gray-200 text-gray-700 hover:border-[#FFCB05] hover:text-[#111111]'
+                          }`}
+                        >
+                          <Star
+                            className={`w-3.5 h-3.5 ${
+                              isFavorite ? 'fill-[#FFCB05] text-[#111111]' : 'text-gray-500'
+                            }`}
+                          />
+                          <span>{isFavorite ? 'Favori' : 'Ajouter'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onReportAgent(agent)}
+                          title="Signaler cet agent"
+                          aria-label={`Signaler ${agent.businessName}`}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-[#111111] hover:bg-gray-100 cursor-pointer"
+                        >
+                          <Flag className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>

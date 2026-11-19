@@ -85,7 +85,6 @@
         },
         "email": {
           "type": "string",
-          "minLength": 5,
           "maxLength": 120
         },
         "updatedAt": {
@@ -147,6 +146,14 @@
         "status": {
           "type": "string",
           "enum": ["active", "matched", "closed"]
+        },
+        "latitude": {
+          "type": "number",
+          "description": "Latitude GPS optionnelle du point de service."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "Longitude GPS optionnelle du point de service."
         },
         "createdAt": {
           "type": "string",
@@ -531,6 +538,52 @@
         "read",
         "createdAt"
       ]
+    },
+    "FavoriteAgent": {
+      "title": "FavoriteAgent",
+      "description": "Agent MTN MoMo enregistré dans la liste personnelle de favoris d'un utilisateur.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "favoriteAgentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "businessName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "commune": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 50
+        },
+        "quartier": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "favoriteAgentId",
+        "businessName",
+        "commune",
+        "quartier",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -553,6 +606,10 @@
     "/agents_public/{agentId}/notifications/{notifId}": {
       "schema": { "$ref": "#/entities/AgentNotification" },
       "description": "Centre d'alertes temps réel de l'agent."
+    },
+    "/agents_public/{agentId}/favorites/{favoriteUid}": {
+      "schema": { "$ref": "#/entities/FavoriteAgent" },
+      "description": "Liste personnelle des agents favoris d'un utilisateur."
     },
     "/listings/{listingId}": {
       "schema": { "$ref": "#/entities/LiquidityListing" },

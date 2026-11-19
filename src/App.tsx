@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   User,
   onAuthStateChanged,
-  signInWithPopup,
   signOut,
 } from 'firebase/auth';
 import {
@@ -18,10 +17,13 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { Smartphone, X } from 'lucide-react';
 import { AgentProfileModal } from './components/AgentProfileModal';
 import { AgentsDirectoryView } from './components/AgentsDirectoryView';
 import { AlertsModal, doesListingMatchRule } from './components/AlertsModal';
+import { AuthModal } from './components/AuthModal';
 import { BeninAnalyticsView } from './components/BeninAnalyticsView';
+import { BottomFloatingBackdrop } from './components/BottomFloatingBackdrop';
 import { ListingsView } from './components/ListingsView';
 import { MessagingView } from './components/MessagingView';
 import { BeninFlag, MtnMomoEmblem } from './components/MtnBrandMarks';
@@ -37,13 +39,13 @@ import {
   OperationType,
   auth,
   db,
-  googleProvider,
   handleFirestoreError,
   registerFcmTokenForUser,
   showBrowserNotification,
   subscribeForegroundFcm,
 } from './firebase';
 import { useOnlineStatus, usePWAInstall } from './hooks/usePWAInstall';
+import { useI18n } from './i18n/I18nContext';
 import {
   AgentNotification,
   AgentPrivateContact,
@@ -52,6 +54,7 @@ import {
   AppTab,
   ChatMessage,
   Conversation,
+  FavoriteAgent,
   FcmToken,
   LiquidityListing,
   LiquidityType,
@@ -62,6 +65,7 @@ import {
 } from './types';
 
 export default function App() {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<AppTab>('listings');
 
   const [user, setUser] = useState<User | null>(null);
@@ -88,11 +92,15 @@ export default function App() {
   const [notifications, setNotifications] = useState<AgentNotification[]>([]);
   const [fcmTokens, setFcmTokens] = useState<FcmToken[]>([]);
   const [fcmStatus, setFcmStatus] = useState<FcmRegistrationResult | null>(null);
+  const [favorites, setFavorites] = useState<FavoriteAgent[]>([]);
+  const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
 
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isPublishOpen, setIsPublishOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isInstallOpen, setIsInstallOpen] = useState<boolean>(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState<boolean>(false);
+  const [installDismissed, setInstallDismissed] = useState<boolean>(false);
   const [reportTarget, setReportTarget] = useState<{
     type: 'listing' | 'agent';
     id: string;
@@ -117,6 +125,11 @@ export default function App() {
   const unreadAlertsCount = useMemo(
     () => notifications.filter((n) => !n.read).length,
     [notifications],
+  );
+
+  const favoriteIds = useMemo(
+    () => new Set(favorites.map((fav) => fav.favoriteAgentId)),
+    [favorites],
   );
 
   useEffect(() => {
@@ -219,7 +232,7 @@ export default function App() {
               knownListingIdsRef.current.add(listing.id);
               if (
                 currentUser &&
-                currentUser.emailVerified &&
+                (currentUser.emailVerified || currentUser.phoneNumber) &&
                 listing.authorId !== currentUser.uid &&
                 activeRules.some((rule) => doesListingMatchRule(listing, rule))
               ) {
@@ -285,6 +298,7 @@ export default function App() {
       setNotifications([]);
       setFcmTokens([]);
       setFcmStatus(null);
+      setFavorites([]);
       return;
     }
 
@@ -393,6 +407,18 @@ export default function App() {
       (err) => handleFirestoreError(err, OperationType.LIST, tokensPath),
     );
 
+    const favsPath = `agents_public/${user.uid}/favorites`;
+    const unsubFavorites = onSnapshot(
+      query(collection(db, 'agents_public', user.uid, 'favorites'), limit(50)),
+      (snap) => {
+        const items: FavoriteAgent[] = snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as Omit<FavoriteAgent, 'id'>) }))
+          .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+        setFavorites(items);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, favsPath),
+    );
+
     let unsubFcmForeground = () => {};
     void subscribeForegroundFcm((payload) => {
       const title =
@@ -424,6 +450,7 @@ export default function App() {
       unsubRules();
       unsubNotifs();
       unsubTokens();
+      unsubFavorites();
       unsubFcmForeground();
     };
   }, [user, showToast]);
@@ -491,13 +518,7 @@ export default function App() {
   }, [user, activeConversationId, conversations]);
 
   const handleSignIn = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-      showToast('Connexion Google réussie.');
-    } catch (error) {
-      console.error('Auth error:', error);
-      showToast('Connexion annulée ou bloquée par le navigateur.');
-    }
+    setIsAuthOpen(true);
   };
 
   const handleSignOut = async () => {
@@ -506,9 +527,26 @@ export default function App() {
     showToast('Vous êtes déconnecté.');
   };
 
+  const handleDirectInstall = async () => {
+    if (isInstallable) {
+      const ok = await install();
+      if (ok) {
+        setInstallDismissed(true);
+        showToast('Application installée sur votre appareil.');
+      }
+      return;
+    }
+    setIsInstallOpen(true);
+  };
+
   const ensureSignedInAndProfile = async (): Promise<boolean> => {
     if (!user) {
-      await handleSignIn();
+      setIsAuthOpen(true);
+      return false;
+    }
+    if (!user.emailVerified && !user.phoneNumber) {
+      setIsAuthOpen(true);
+      showToast("Confirmez d'abord votre adresse e-mail ou votre numéro de téléphone.");
       return false;
     }
     if (!agentProfile) {
@@ -601,8 +639,15 @@ export default function App() {
     commune: string;
     quartier: string;
     details: string;
+    latitude?: number;
+    longitude?: number;
   }) => {
     if (!user || !agentProfile) return;
+    const hasValidCoords =
+      typeof payload.latitude === 'number' &&
+      Number.isFinite(payload.latitude) &&
+      typeof payload.longitude === 'number' &&
+      Number.isFinite(payload.longitude);
     try {
       await addDoc(collection(db, 'listings'), {
         authorId: user.uid,
@@ -615,6 +660,9 @@ export default function App() {
         commune: payload.commune,
         quartier: payload.quartier,
         details: payload.details,
+        ...(hasValidCoords
+          ? { latitude: payload.latitude, longitude: payload.longitude }
+          : {}),
         status: 'active',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -930,7 +978,7 @@ export default function App() {
   };
 
   const handleScanExistingListings = async (): Promise<number> => {
-    if (!user || !user.emailVerified) return 0;
+    if (!user || (!user.emailVerified && !user.phoneNumber)) return 0;
     let count = 0;
     for (const listing of listings) {
       if (listing.authorId === user.uid) continue;
@@ -1007,14 +1055,86 @@ export default function App() {
     }
   };
 
+  const handleToggleFavoriteAgent = async (agent: AgentPublic) => {
+    if (!user) {
+      setIsAuthOpen(true);
+      return;
+    }
+    if (!user.emailVerified && !user.phoneNumber) {
+      setIsAuthOpen(true);
+      showToast("Confirmez d'abord votre adresse e-mail ou votre numéro de téléphone.");
+      return;
+    }
+    if (agent.uid === user.uid) {
+      showToast('Vous ne pouvez pas ajouter votre propre fiche aux favoris.');
+      return;
+    }
+
+    const favPath = `agents_public/${user.uid}/favorites/${agent.uid}`;
+    const alreadyFavorite = favoriteIds.has(agent.uid);
+    setFavoriteBusyId(agent.uid);
+    try {
+      if (alreadyFavorite) {
+        await deleteDoc(doc(db, 'agents_public', user.uid, 'favorites', agent.uid));
+        showToast('Agent retiré de vos favoris.');
+      } else {
+        await setDoc(doc(db, 'agents_public', user.uid, 'favorites', agent.uid), {
+          ownerId: user.uid,
+          favoriteAgentId: agent.uid,
+          businessName: agent.businessName.slice(0, FIELD_LIMITS.businessNameMax),
+          commune: agent.commune.slice(0, FIELD_LIMITS.communeMax),
+          quartier: agent.quartier.slice(0, FIELD_LIMITS.quartierMax),
+          createdAt: serverTimestamp(),
+        });
+        showToast('Agent ajouté à vos favoris.');
+      }
+    } catch (err) {
+      handleFirestoreError(
+        err,
+        alreadyFavorite ? OperationType.DELETE : OperationType.CREATE,
+        favPath,
+      );
+    } finally {
+      setFavoriteBusyId(null);
+    }
+  };
+
+  const handleRemoveFavorite = async (favoriteAgentId: string) => {
+    if (!user) return;
+    const favPath = `agents_public/${user.uid}/favorites/${favoriteAgentId}`;
+    setFavoriteBusyId(favoriteAgentId);
+    try {
+      await deleteDoc(doc(db, 'agents_public', user.uid, 'favorites', favoriteAgentId));
+      showToast('Agent retiré de vos favoris.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, favPath);
+    } finally {
+      setFavoriteBusyId(null);
+    }
+  };
+
+  const handleContactFavorite = (fav: FavoriteAgent) => {
+    setIsProfileOpen(false);
+    const live = agents.find((a) => a.uid === fav.favoriteAgentId);
+    void startConversation({
+      recipientId: fav.favoriteAgentId,
+      recipientName: live?.businessName || fav.businessName,
+      listingId: 'direct',
+      listingSummary: `Contact direct MTN MoMo · ${live?.quartier || fav.quartier}, ${live?.commune || fav.commune}`,
+    });
+  };
+
   const navItems: { id: AppTab; label: string }[] = [
-    { id: 'listings', label: 'Annonces' },
-    { id: 'agents', label: 'Agents' },
+    { id: 'listings', label: t('nav.listings') },
+    { id: 'agents', label: t('nav.agents') },
     {
       id: 'messages',
-      label: conversations.length > 0 ? `Messagerie (${conversations.length})` : 'Messagerie',
+      label:
+        conversations.length > 0
+          ? `${t('nav.messages')} (${conversations.length})`
+          : t('nav.messages'),
     },
-    { id: 'analytics', label: 'Analyses Bénin' },
+    { id: 'analytics', label: t('nav.analytics') },
   ];
 
   return (
@@ -1028,14 +1148,14 @@ export default function App() {
               e.preventDefault();
               setActiveTab('listings');
             }}
-            className="text-base sm:text-lg font-black font-display tracking-tight text-[#111111] whitespace-nowrap shrink-0"
+            className="text-base sm:text-lg font-extrabold font-display tracking-tight text-[#111111] whitespace-nowrap shrink-0"
           >
             MTN MoMo Connect Bénin
           </a>
 
           <nav
             aria-label="Navigation principale"
-            className="hidden md:flex items-center gap-6 text-sm font-bold"
+            className="hidden md:flex items-center gap-6 text-sm font-semibold"
           >
             {navItems.map((item) => {
               const active = activeTab === item.id;
@@ -1060,26 +1180,24 @@ export default function App() {
             <button
               type="button"
               onClick={handleOpenPublish}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-black font-display bg-[#004F71] text-white hover:bg-[#003a54] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-display bg-[#004F71] text-white hover:bg-[#003a54] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              Publier
+              {t('nav.publish')}
             </button>
           </div>
         </div>
       </header>
 
-      {/* Barre d'espace MoMo Blue + Drapeau du Bénin + Alertes + Téléchargement App + Session Agent */}
+      {/* Barre d'espace MoMo Blue + Drapeau du Bénin + Langues + Alertes + Compte */}
       <NetworkSwitcherBar
         user={user}
         agentProfile={agentProfile}
         isAdmin={isAdmin}
         authLoading={authLoading}
-        isInstalled={isInstalled}
         unreadAlertsCount={unreadAlertsCount}
-        onSignIn={handleSignIn}
+        onOpenAuthModal={() => setIsAuthOpen(true)}
         onSignOut={handleSignOut}
         onOpenProfileModal={() => setIsProfileOpen(true)}
-        onOpenInstallModal={() => setIsInstallOpen(true)}
         onOpenAlertsModal={() => setIsAlertsOpen(true)}
       />
 
@@ -1092,7 +1210,7 @@ export default function App() {
               key={item.id}
               type="button"
               onClick={() => setActiveTab(item.id)}
-              className={`text-xs font-bold whitespace-nowrap shrink-0 pb-1 border-b-2 cursor-pointer ${
+              className={`text-xs font-semibold whitespace-nowrap shrink-0 pb-1 border-b-2 cursor-pointer ${
                 active
                   ? 'border-[#004F71] text-[#004F71]'
                   : 'border-transparent text-gray-600'
@@ -1112,9 +1230,7 @@ export default function App() {
             loading={listingsLoading}
             currentUid={user?.uid}
             isAdmin={isAdmin}
-            isInstalled={isInstalled}
             onOpenPublish={handleOpenPublish}
-            onOpenInstallModal={() => setIsInstallOpen(true)}
             onContactAuthor={(listing) =>
               startConversation({
                 recipientId: listing.authorId,
@@ -1145,6 +1261,8 @@ export default function App() {
             agents={agents}
             loading={agentsLoading}
             currentUid={user?.uid}
+            favoriteIds={favoriteIds}
+            favoriteBusyId={favoriteBusyId}
             onContactAgent={(agent) =>
               startConversation({
                 recipientId: agent.uid,
@@ -1164,6 +1282,7 @@ export default function App() {
                 label: agent.businessName,
               });
             }}
+            onToggleFavorite={handleToggleFavoriteAgent}
             onOpenProfileModal={() => {
               if (!user) {
                 void handleSignIn();
@@ -1195,34 +1314,34 @@ export default function App() {
         )}
       </main>
 
+      {/* Section inférieure avec images flottantes en arrière-plan des échanges internes */}
+      <BottomFloatingBackdrop
+        isInstalled={isInstalled}
+        onTriggerInstall={() => void handleDirectInstall()}
+      />
+
       {/* Pied de page aux couleurs MTN MoMo Bénin */}
-      <footer className="border-t border-gray-200 bg-[#00334A] text-white py-9 mt-8">
+      <footer className="border-t border-white/10 bg-[#001D2B] text-white py-8">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 flex flex-col md:flex-row justify-between gap-6 text-xs text-white/80">
           <div className="flex items-start gap-3.5 max-w-2xl">
             <MtnMomoEmblem size="md" />
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2 font-black font-display text-sm text-[#FFCB05]">
+              <div className="flex items-center gap-2 font-bold font-display text-sm text-[#FFCB05]">
                 <BeninFlag className="w-5 h-3.5" />
                 <span>MTN MoMo Connect Bénin</span>
               </div>
-              <p className="leading-relaxed">
-                Plateforme indépendante de mise en relation et de visibilité des liquidités entre
-                agents MTN MoMo au Bénin. Non affiliée officiellement à MTN Bénin. Aucun fonds
-                n'est conservé ni transféré sur la plateforme.
-              </p>
+              <p className="leading-relaxed">{t('footer.disclaimer')}</p>
             </div>
           </div>
           <div className="space-y-2 md:text-right shrink-0">
-            <div className="font-bold text-[#FFCB05]">
-              République du Bénin · Réseau MTN MoMo
-            </div>
+            <div className="font-semibold text-[#FFCB05]">{t('footer.tagline')}</div>
             {!isInstalled && (
               <button
                 type="button"
-                onClick={() => setIsInstallOpen(true)}
+                onClick={() => void handleDirectInstall()}
                 className="text-xs font-semibold text-white underline hover:text-[#FFCB05] cursor-pointer"
               >
-                Installer l'application mobile / desktop
+                {t('footer.installLink')}
               </button>
             )}
             <p className="text-white/65">© 2026 MTN MoMo Connect Bénin</p>
@@ -1231,6 +1350,12 @@ export default function App() {
       </footer>
 
       {/* Modales */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onSuccess={(msg) => showToast(msg)}
+      />
+
       <PublishListingModal
         isOpen={isPublishOpen}
         agentProfile={agentProfile}
@@ -1241,14 +1366,19 @@ export default function App() {
       <AgentProfileModal
         isOpen={isProfileOpen}
         userEmail={user?.email || ''}
+        userPhone={user?.phoneNumber || ''}
         agentProfile={agentProfile}
         privateContact={privateContact}
         isAdmin={isAdmin}
+        favorites={favorites}
+        allAgents={agents}
         myVerificationRequests={myVerificationRequests}
         adminVerificationRequests={adminVerificationRequests}
         adminReports={adminReports}
         onClose={() => setIsProfileOpen(false)}
         onSaveProfile={handleSaveProfile}
+        onRemoveFavorite={handleRemoveFavorite}
+        onContactFavorite={handleContactFavorite}
         onRequestVerification={handleRequestVerification}
         onModerateVerification={handleModerateVerification}
         onResolveReport={handleResolveReport}
@@ -1294,6 +1424,38 @@ export default function App() {
         onDeleteNotification={handleDeleteNotification}
         onOpenNotificationListing={handleOpenNotificationListing}
       />
+
+      {/* Invite directe d'installation au premier accès (1 clic) */}
+      {!isInstalled && !installDismissed && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-sm rounded-2xl bg-[#004F71] text-white border border-[#FFCB05]/40 p-3.5 shadow-2xl flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-[#FFCB05] text-[#111111] flex items-center justify-center shrink-0">
+            <Smartphone className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-bold font-display text-[#FFCB05] truncate">
+              {t('install.bannerTitle')}
+            </div>
+            <div className="text-[11px] text-white/85 leading-snug">
+              {t('install.bannerDesc')}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleDirectInstall()}
+            className="px-3 py-1.5 rounded-xl bg-[#FFCB05] text-[#111111] text-xs font-bold font-display hover:bg-[#f2bd00] shrink-0 cursor-pointer"
+          >
+            {t('install.bannerBtn')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setInstallDismissed(true)}
+            aria-label="Fermer"
+            className="p-1 text-white/70 hover:text-white cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {!isOnline && (
         <div className="fixed bottom-4 left-4 z-50 rounded-xl bg-[#111111] text-[#FFCB05] border border-[#FFCB05]/40 px-3.5 py-2 text-xs font-bold shadow-lg">

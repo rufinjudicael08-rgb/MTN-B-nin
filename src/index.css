@@ -2,8 +2,8 @@
 
 @layer base {
   :root {
-    --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
-    --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-display: 'Plus Jakarta Sans', 'Noto Sans', system-ui, -apple-system, sans-serif;
+    --font-body: 'Inter', 'Noto Sans', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
     /* Palette officielle MTN Bénin & MTN MoMo App */
@@ -35,10 +35,14 @@
     font-family: var(--font-body);
     color: var(--ink-primary);
     background-color: var(--canvas);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   h1, h2, h3, h4, .font-display {
     font-family: var(--font-display);
+    letter-spacing: -0.02em;
   }
 
   .font-mono-num {
@@ -59,13 +63,54 @@
   }
 }
 
+@keyframes momoFloatSlow {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translate3d(10px, -16px, 0) rotate(1.2deg);
+  }
+  100% {
+    transform: translate3d(-6px, 8px, 0) rotate(-1deg);
+  }
+}
+
+@keyframes momoFloatReverse {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(1.5deg);
+  }
+  50% {
+    transform: translate3d(-12px, 14px, 0) rotate(-1.4deg);
+  }
+  100% {
+    transform: translate3d(8px, -10px, 0) rotate(1deg);
+  }
+}
+
 .momo-ken-burns {
   animation: momoBackdropPan 14s ease-in-out infinite alternate;
   will-change: transform;
 }
 
+.momo-float-slow {
+  animation: momoFloatSlow 12s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.momo-float-reverse {
+  animation: momoFloatReverse 15s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .momo-ken-burns {
+  .momo-ken-burns,
+  .momo-float-slow,
+  .momo-float-reverse {
     animation: none;
   }
 }
+
+.leaflet-container {
+  font-family: var(--font-body);
+}
+

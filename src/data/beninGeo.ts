@@ -4,6 +4,7 @@ export interface BeninCommune {
   name: string;
   department: string;
   role: string;
+  coords: [number, number];
   quartiers: string[];
 }
 
@@ -12,6 +13,7 @@ export const BENIN_COMMUNES: BeninCommune[] = [
     name: 'Cotonou',
     department: 'Littoral',
     role: 'Poumon économique et marchés centraux',
+    coords: [6.3703, 2.3912],
     quartiers: [
       'Dantokpa',
       'Akpakpa',
@@ -31,6 +33,7 @@ export const BENIN_COMMUNES: BeninCommune[] = [
     name: 'Abomey-Calavi',
     department: 'Atlantique',
     role: 'Pôle universitaire et forte croissance résidentielle',
+    coords: [6.4485, 2.3557],
     quartiers: [
       'Tankpè',
       'Calavi-Centre (UAC)',
@@ -48,6 +51,7 @@ export const BENIN_COMMUNES: BeninCommune[] = [
     name: 'Porto-Novo',
     department: 'Ouémé',
     role: 'Capitale administrative et échanges frontaliers',
+    coords: [6.4969, 2.6289],
     quartiers: [
       'Ouando',
       'Adjina',
@@ -63,6 +67,7 @@ export const BENIN_COMMUNES: BeninCommune[] = [
     name: 'Parakou',
     department: 'Borgou',
     role: 'Métropole commerciale du Nord-Bénin',
+    coords: [9.3372, 2.6303],
     quartiers: [
       'Albarika',
       'Zongo',
@@ -77,6 +82,7 @@ export const BENIN_COMMUNES: BeninCommune[] = [
     name: 'Bohicon',
     department: 'Zou',
     role: 'Carrefour routier et commercial du Centre',
+    coords: [7.1783, 2.0667],
     quartiers: [
       'Bohicon Centre',
       'Houègbo',
@@ -90,6 +96,7 @@ export const BENIN_COMMUNES: BeninCommune[] = [
     name: 'Ouidah',
     department: 'Atlantique',
     role: 'Pôle historique et axe côtier Mono-Atlantique',
+    coords: [6.3631, 2.0851],
     quartiers: [
       'Ouidah Centre',
       'Pahou',
@@ -102,36 +109,42 @@ export const BENIN_COMMUNES: BeninCommune[] = [
     name: 'Abomey',
     department: 'Zou',
     role: 'Pôle historique et marché régional',
+    coords: [7.1829, 1.9912],
     quartiers: ['Djègbé', 'Hounli', 'Vidolé', 'Goho'],
   },
   {
     name: 'Lokossa',
     department: 'Mono',
     role: 'Chef-lieu administratif du Sud-Ouest',
+    coords: [6.6387, 1.7167],
     quartiers: ['Lokossa Centre', 'Guinkomey', 'Agnamè', 'Koudo'],
   },
   {
     name: 'Natitingou',
     department: 'Atacora',
     role: 'Carrefour économique du Nord-Ouest',
+    coords: [10.3042, 1.3796],
     quartiers: ['Yimporima', 'Kantaborifa', 'Ourbouga', 'Bagapodi'],
   },
   {
     name: 'Kandi',
     department: 'Alibori',
     role: 'Grand marché agricole et transit Nord-Est',
+    coords: [11.1342, 2.9386],
     quartiers: ['Kandi Centre', 'Kossarou', 'Baobab', 'Angaradébou'],
   },
   {
     name: 'Djougou',
     department: 'Donga',
     role: 'Pôle commercial de la Donga',
+    coords: [9.7085, 1.666],
     quartiers: ['Djougou Centre', 'Taïfa', 'Zountori', 'Kilirk'],
   },
   {
     name: 'Pobè',
     department: 'Plateau',
     role: 'Pôle agro-industriel du Plateau',
+    coords: [6.9801, 2.6649],
     quartiers: ['Pobè Centre', 'Oké-Ola', 'Issaba'],
   },
 ];
@@ -285,3 +298,40 @@ export function operatorToTheme(op: OperatorName | ''): NetworkTheme {
   if (op === 'Celtiis Cash') return 'celtiis';
   return 'global';
 }
+
+export function getCommuneCoords(communeName: string): [number, number] {
+  const found = BENIN_COMMUNES.find((c) => c.name === communeName);
+  return found ? found.coords : [6.3703, 2.3912];
+}
+
+export function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export function formatDistance(km: number): string {
+  if (!Number.isFinite(km) || km < 0) return '';
+  if (km < 1) {
+    return `${Math.max(10, Math.round(km * 1000))} m`;
+  }
+  if (km < 10) {
+    return `${km.toFixed(1).replace('.', ',')} km`;
+  }
+  return `${Math.round(km)} km`;
+}
+

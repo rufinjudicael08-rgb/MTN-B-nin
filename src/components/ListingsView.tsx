@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
-  Download,
   Flag,
+  LocateFixed,
+  MapPin,
   MessageSquare,
+  Navigation,
   Plus,
   Search,
-  ShieldAlert,
   SlidersHorizontal,
   Trash2,
   X,
@@ -15,13 +16,18 @@ import {
 import {
   BENIN_COMMUNES,
   VERIFICATION_LABELS,
+  calculateDistanceKm,
+  formatDistance,
   formatFcfa,
+  getCommuneCoords,
 } from '../data/beninGeo';
+import { useI18n } from '../i18n/I18nContext';
 import {
   LiquidityListing,
   LiquidityType,
   ListingIntent,
 } from '../types';
+import { GeoCoords, ListingLocationMap } from './ListingLocationMap';
 import { BeninFlag, MOMO_AGENT_SCENES, MtnMomoEmblem } from './MtnBrandMarks';
 
 interface ListingsViewProps {
@@ -29,9 +35,7 @@ interface ListingsViewProps {
   loading: boolean;
   currentUid?: string;
   isAdmin: boolean;
-  isInstalled: boolean;
   onOpenPublish: () => void;
-  onOpenInstallModal: () => void;
   onContactAuthor: (listing: LiquidityListing) => void;
   onReportListing: (listing: LiquidityListing) => void;
   onUpdateListingStatus: (listing: LiquidityListing, status: 'matched' | 'closed') => Promise<void>;
@@ -39,20 +43,26 @@ interface ListingsViewProps {
   onNavigateAnalytics: () => void;
 }
 
+interface EnrichedListing {
+  listing: LiquidityListing;
+  coords: GeoCoords;
+  isExact: boolean;
+  distanceKm: number | null;
+}
+
 export const ListingsView: React.FC<ListingsViewProps> = ({
   listings,
   loading,
   currentUid,
   isAdmin,
-  isInstalled,
   onOpenPublish,
-  onOpenInstallModal,
   onContactAuthor,
   onReportListing,
   onUpdateListingStatus,
   onDeleteListing,
   onNavigateAnalytics,
 }) => {
+  const { t } = useI18n();
   const [minAmount, setMinAmount] = useState<string>('');
   const [communeFilter, setCommuneFilter] = useState<string>('');
   const [quartierQuery, setQuartierQuery] = useState<string>('');
@@ -62,6 +72,13 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeSlide, setActiveSlide] = useState<number>(0);
 
+  const [userCoords, setUserCoords] = useState<GeoCoords | null>(null);
+  const [nearMeActive, setNearMeActive] = useState<boolean>(false);
+  const [radiusKm, setRadiusKm] = useState<number | null>(null);
+  const [locatingUser, setLocatingUser] = useState<boolean>(false);
+  const [geoError, setGeoError] = useState<string>('');
+  const [showNearbyMapModal, setShowNearbyMapModal] = useState<boolean>(false);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       setActiveSlide((prev) => (prev + 1) % MOMO_AGENT_SCENES.length);
@@ -69,11 +86,55 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
     return () => window.clearInterval(timer);
   }, []);
 
-  const filteredListings = useMemo(() => {
+  const requestUserLocation = (activateNearMe: boolean) => {
+    setGeoError('');
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      setGeoError('La géolocalisation GPS n’est pas disponible dans votre navigateur.');
+      return;
+    }
+    setLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserCoords({
+          lat: Number(pos.coords.latitude.toFixed(6)),
+          lng: Number(pos.coords.longitude.toFixed(6)),
+        });
+        if (activateNearMe) {
+          setNearMeActive(true);
+        }
+        setLocatingUser(false);
+      },
+      (err) => {
+        setLocatingUser(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGeoError('Autorisation GPS refusée. Activez la localisation pour trier autour de vous.');
+        } else {
+          setGeoError('Impossible de déterminer votre position GPS actuelle.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  };
+
+  const handleToggleNearMe = () => {
+    if (nearMeActive) {
+      setNearMeActive(false);
+      setRadiusKm(null);
+      setShowNearbyMapModal(false);
+      return;
+    }
+    if (userCoords) {
+      setNearMeActive(true);
+      return;
+    }
+    requestUserLocation(true);
+  };
+
+  const enrichedListings = useMemo<EnrichedListing[]>(() => {
     const amountNum = Number(minAmount) || 0;
     const q = quartierQuery.trim().toLowerCase();
 
-    return listings.filter((item) => {
+    const baseFiltered = listings.filter((item) => {
       if (item.operator !== 'MTN MoMo') return false;
       if (intentFilter !== 'all' && item.intent !== intentFilter) return false;
       if (liquidityFilter !== 'all' && item.liquidityType !== liquidityFilter) return false;
@@ -89,7 +150,50 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
       }
       return true;
     });
-  }, [listings, intentFilter, liquidityFilter, communeFilter, minAmount, quartierQuery]);
+
+    const mapped: EnrichedListing[] = baseFiltered.map((listing) => {
+      const isExact =
+        listing.latitude !== undefined && listing.longitude !== undefined;
+      const [cLat, cLng] = getCommuneCoords(listing.commune);
+      const coords: GeoCoords = isExact
+        ? { lat: listing.latitude as number, lng: listing.longitude as number }
+        : { lat: cLat, lng: cLng };
+
+      const distanceKm = userCoords
+        ? calculateDistanceKm(userCoords.lat, userCoords.lng, coords.lat, coords.lng)
+        : null;
+
+      return { listing, coords, isExact, distanceKm };
+    });
+
+    if (nearMeActive && userCoords) {
+      return mapped
+        .filter((entry) =>
+          radiusKm === null || entry.distanceKm === null
+            ? true
+            : entry.distanceKm <= radiusKm,
+        )
+        .sort((a, b) => {
+          const da = a.distanceKm ?? Number.MAX_SAFE_INTEGER;
+          const db = b.distanceKm ?? Number.MAX_SAFE_INTEGER;
+          if (Math.abs(da - db) > 0.05) return da - db;
+          if (a.isExact !== b.isExact) return a.isExact ? -1 : 1;
+          return 0;
+        });
+    }
+
+    return mapped;
+  }, [
+    listings,
+    intentFilter,
+    liquidityFilter,
+    communeFilter,
+    minAmount,
+    quartierQuery,
+    userCoords,
+    nearMeActive,
+    radiusKm,
+  ]);
 
   const stats = useMemo(() => {
     const active = listings.filter((l) => l.status === 'active' && l.operator === 'MTN MoMo');
@@ -109,6 +213,19 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
   }, [listings]);
 
   const selectedCommuneObj = BENIN_COMMUNES.find((c) => c.name === communeFilter);
+
+  const selectedListingDistance = useMemo(() => {
+    if (!selectedListing || !userCoords) return null;
+    const isExact =
+      selectedListing.latitude !== undefined && selectedListing.longitude !== undefined;
+    const [cLat, cLng] = getCommuneCoords(selectedListing.commune);
+    const lat = isExact ? (selectedListing.latitude as number) : cLat;
+    const lng = isExact ? (selectedListing.longitude as number) : cLng;
+    return {
+      km: calculateDistanceKm(userCoords.lat, userCoords.lng, lat, lng),
+      isExact,
+    };
+  }, [selectedListing, userCoords]);
 
   const formatTimestamp = (listing: LiquidityListing) => {
     if (!listing.createdAt) return 'À l’instant';
@@ -131,6 +248,8 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
     setQuartierQuery('');
     setIntentFilter('all');
     setLiquidityFilter('all');
+    setNearMeActive(false);
+    setRadiusKm(null);
   };
 
   const handleStatusChange = async (listing: LiquidityListing, status: 'matched' | 'closed') => {
@@ -159,7 +278,6 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
     <div className="space-y-8">
       {/* Hero avec arrière-plan animé des échanges d'agents au Bénin */}
       <section className="relative rounded-2xl overflow-hidden border border-[#111111]/15 bg-[#00334A] text-white min-h-[380px] flex flex-col justify-between">
-        {/* Diaporama animé (opacity + GPU transform uniquement) */}
         <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
           {MOMO_AGENT_SCENES.map((scene, index) => (
             <img
@@ -181,51 +299,40 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
               <MtnMomoEmblem size="sm" />
               <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#FFCB05]">
                 <BeninFlag className="w-5 h-3.5" />
-                <span>MTN MoMo · République du Bénin</span>
+                <span>{t('hero.badge')}</span>
               </div>
             </div>
 
-            <h1 className="font-display text-3xl sm:text-5xl font-black tracking-tight text-white leading-[1.05] [text-wrap:balance]">
-              La liquidité <span className="text-[#FFCB05]">MTN MoMo</span> entre agents du Bénin.
+            <h1 className="font-display text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-[1.1] [text-wrap:balance]">
+              {t('hero.titleStart')}
+              <span className="text-[#FFCB05]">MTN MoMo</span>
+              {t('hero.titleEnd')}
             </h1>
 
-            <p className="text-sm sm:text-base text-white/90 max-w-xl leading-relaxed">
-              Consultez les disponibilités de cash physique et d’unités de valeur (UV) signalées par
-              les points de service MTN MoMo à Cotonou, Abomey-Calavi, Porto-Novo, Parakou et dans
-              tout le Bénin.
+            <p className="text-sm sm:text-base text-white/90 max-w-xl leading-relaxed font-normal">
+              {t('hero.subtitle')}
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 type="button"
                 onClick={onOpenPublish}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-black font-display bg-[#FFCB05] text-[#111111] hover:bg-[#f2bd00] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold font-display bg-[#FFCB05] text-[#111111] hover:bg-[#f2bd00] transition-colors cursor-pointer whitespace-nowrap shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                <span>Publier une disponibilité</span>
+                <span>{t('hero.ctaPublish')}</span>
               </button>
-              {!isInstalled && (
-                <button
-                  type="button"
-                  onClick={onOpenInstallModal}
-                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold bg-white/15 hover:bg-white/25 text-white border border-white/25 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                >
-                  <Download className="w-4 h-4 text-[#FFCB05]" />
-                  <span>Télécharger l'app</span>
-                </button>
-              )}
               <button
                 type="button"
                 onClick={onNavigateAnalytics}
                 className="inline-flex items-center gap-1.5 px-3 py-3 text-sm font-semibold text-[#FFCB05] hover:underline cursor-pointer whitespace-nowrap shrink-0"
               >
-                <span>Analyses Bénin</span>
+                <span>{t('hero.ctaAnalytics')}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Contrôle du diaporama terrain Bénin */}
           <div className="lg:text-right space-y-2 shrink-0">
             <div className="text-xs font-semibold text-[#FFCB05]">{currentScene.title}</div>
             <div className="text-xs text-white/80">{currentScene.location}</div>
@@ -248,52 +355,119 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
         {/* Bande KPI 4 colonnes pleine largeur sous le bloc Hero */}
         <div className="relative z-10 grid grid-cols-2 lg:grid-cols-4 border-t border-white/15 bg-[#00283A]/85 backdrop-blur-xs divide-y lg:divide-y-0 lg:divide-x divide-white/15">
           <div className="px-5 py-3.5">
-            <div className="text-[11px] text-white/70">Annonces MTN MoMo</div>
-            <div className="text-xl font-extrabold font-mono-num text-[#FFCB05] mt-0.5">
+            <div className="text-[11px] font-medium text-white/75">{t('kpi.listings')}</div>
+            <div className="text-xl font-bold font-mono-num text-[#FFCB05] mt-0.5">
               {stats.activeCount}
             </div>
           </div>
           <div className="px-5 py-3.5">
-            <div className="text-[11px] text-white/70">Communes béninoises</div>
-            <div className="text-xl font-extrabold font-mono-num text-white mt-0.5">
+            <div className="text-[11px] font-medium text-white/75">{t('kpi.communes')}</div>
+            <div className="text-xl font-bold font-mono-num text-white mt-0.5">
               {stats.communesCount}
             </div>
           </div>
           <div className="px-5 py-3.5">
-            <div className="text-[11px] text-white/70">Offres disponibles</div>
-            <div className="text-base sm:text-lg font-extrabold font-mono-num text-white mt-0.5 truncate">
+            <div className="text-[11px] font-medium text-white/75">{t('kpi.offers')}</div>
+            <div className="text-base sm:text-lg font-bold font-mono-num text-white mt-0.5 truncate">
               {formatFcfa(stats.offerTotal)}
             </div>
           </div>
           <div className="px-5 py-3.5">
-            <div className="text-[11px] text-white/70">Besoins recherchés</div>
-            <div className="text-base sm:text-lg font-extrabold font-mono-num text-white mt-0.5 truncate">
+            <div className="text-[11px] font-medium text-white/75">{t('kpi.requests')}</div>
+            <div className="text-base sm:text-lg font-bold font-mono-num text-white mt-0.5 truncate">
               {formatFcfa(stats.requestTotal)}
             </div>
           </div>
         </div>
       </section>
 
-      {/* Barre de recherche multi-critères MTN MoMo Bénin */}
+      {/* Barre de recherche multi-critères + Bouton "Annonces autour de moi" */}
       <section className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-bold text-[#111111]">
             <SlidersHorizontal className="w-4 h-4 text-[#004F71]" />
-            <span>Rechercher une liquidité MTN MoMo au Bénin</span>
+            <span>{t('search.heading')}</span>
           </div>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-xs font-semibold text-gray-500 hover:text-[#111111] cursor-pointer"
-          >
-            Réinitialiser les filtres
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={locatingUser}
+              onClick={handleToggleNearMe}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer ${
+                nearMeActive
+                  ? 'bg-[#FFCB05] text-[#111111] border border-[#111111]/20'
+                  : 'bg-[#004F71] text-white hover:bg-[#003a54]'
+              }`}
+            >
+              <LocateFixed className="w-3.5 h-3.5" />
+              <span>
+                {locatingUser
+                  ? 'Localisation en cours…'
+                  : nearMeActive
+                    ? 'Autour de moi (activé)'
+                    : 'Annonces autour de moi'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-xs font-semibold text-gray-500 hover:text-[#111111] px-2 py-1 cursor-pointer"
+            >
+              {t('search.reset')}
+            </button>
+          </div>
         </div>
+
+        {geoError && (
+          <p className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5">
+            {geoError}
+          </p>
+        )}
+
+        {nearMeActive && userCoords && (
+          <div className="p-3 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[#111111]">
+              <Navigation className="w-3.5 h-3.5 text-[#004F71] shrink-0" />
+              <span className="font-bold">Tri par proximité activé</span>
+              <span className="text-gray-600 font-mono-num">
+                ({userCoords.lat.toFixed(4)}, {userCoords.lng.toFixed(4)})
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={radiusKm === null ? '' : String(radiusKm)}
+                onChange={(e) =>
+                  setRadiusKm(e.target.value ? Number(e.target.value) : null)
+                }
+                aria-label="Rayon de recherche"
+                className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-semibold text-[#111111]"
+              >
+                <option value="">Toutes distances</option>
+                <option value="2">Rayon ≤ 2 km</option>
+                <option value="5">Rayon ≤ 5 km</option>
+                <option value="15">Rayon ≤ 15 km</option>
+                <option value="30">Rayon ≤ 30 km</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setShowNearbyMapModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#004F71] text-white hover:bg-[#003a54] cursor-pointer"
+              >
+                <MapPin className="w-3.5 h-3.5 text-[#FFCB05]" />
+                <span>Voir sur la carte</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Montant min. (FCFA)
+              {t('search.minAmount')}
             </label>
             <input
               type="number"
@@ -308,7 +482,7 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Commune (Bénin)
+              {t('search.commune')}
             </label>
             <select
               value={communeFilter}
@@ -318,7 +492,7 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
               }}
               className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FFCB05]"
             >
-              <option value="">Toutes les communes</option>
+              <option value="">{t('search.allCommunes')}</option>
               {BENIN_COMMUNES.map((c) => (
                 <option key={c.name} value={c.name}>
                   {c.name} ({c.department})
@@ -329,7 +503,7 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Quartier / zone
+              {t('search.quartier')}
             </label>
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -354,16 +528,16 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Nature d'opération
+              {t('search.operation')}
             </label>
             <select
               value={intentFilter}
               onChange={(e) => setIntentFilter(e.target.value as ListingIntent | 'all')}
               className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FFCB05]"
             >
-              <option value="all">Offres & Demandes</option>
-              <option value="offer">Disponibilités (Offres)</option>
-              <option value="request">Besoins (Demandes)</option>
+              <option value="all">{t('search.allOps')}</option>
+              <option value="offer">{t('search.offersOnly')}</option>
+              <option value="request">{t('search.requestsOnly')}</option>
             </select>
           </div>
         </div>
@@ -371,16 +545,16 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-[#FFFBEB] border border-[#FDE68A]">
             {[
-              { id: 'all', label: 'Cash & UV' },
-              { id: 'cash', label: 'Cash physique' },
-              { id: 'uv', label: 'UV / Float MoMo' },
-              { id: 'both', label: 'Échange mixte' },
+              { id: 'all', label: t('search.cashAndUv') },
+              { id: 'cash', label: t('search.cashOnly') },
+              { id: 'uv', label: t('search.uvOnly') },
+              { id: 'both', label: t('search.mixed') },
             ].map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setLiquidityFilter(tab.id as LiquidityType | 'all')}
-                className={`px-3 py-1 rounded-md text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                className={`px-3 py-1 rounded-md text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
                   liquidityFilter === tab.id
                     ? 'bg-[#FFCB05] text-[#111111]'
                     : 'text-gray-600 hover:text-[#111111]'
@@ -391,22 +565,19 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
             ))}
           </div>
 
-          <p className="text-xs text-gray-500">
-            {filteredListings.length} annonce{filteredListings.length > 1 ? 's' : ''} MTN MoMo
-            active{filteredListings.length > 1 ? 's' : ''}
+          <p className="text-xs text-gray-500 font-mono-num">
+            {enrichedListings.length} annonce{enrichedListings.length > 1 ? 's' : ''}
           </p>
         </div>
       </section>
 
       {/* Flux des annonces MTN MoMo */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-extrabold font-display text-[#111111]">
-            Disponibilités et besoins MTN MoMo en direct
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-xl font-bold font-display text-[#111111]">
+            {t('listings.heading')}
           </h2>
-          <span className="text-xs text-gray-500">
-            Confirmez toujours la liquidité avant de vous déplacer
-          </span>
+          <span className="text-xs text-gray-500">{t('listings.safetyReminder')}</span>
         </div>
 
         {loading ? (
@@ -418,36 +589,31 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
               />
             ))}
           </div>
-        ) : filteredListings.length === 0 ? (
+        ) : enrichedListings.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center space-y-3">
-            <h3 className="text-base font-bold text-[#111111]">
-              Aucune annonce MTN MoMo active ne correspond à ces filtres
-            </h3>
-            <p className="text-sm text-gray-600 max-w-md mx-auto">
-              Ajustez la commune ou le montant, ou publiez dès maintenant votre disponibilité de
-              cash ou d'UV MTN MoMo pour les agents voisins.
-            </p>
+            <h3 className="text-base font-bold text-[#111111]">{t('listings.emptyTitle')}</h3>
+            <p className="text-sm text-gray-600 max-w-md mx-auto">{t('listings.emptyDesc')}</p>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
                 type="button"
                 onClick={onOpenPublish}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black font-display bg-[#FFCB05] text-[#111111] hover:bg-[#f2bd00] cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold font-display bg-[#FFCB05] text-[#111111] hover:bg-[#f2bd00] cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Publier une annonce MTN MoMo</span>
+                <span>{t('hero.ctaPublish')}</span>
               </button>
               <button
                 type="button"
                 onClick={resetFilters}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border border-gray-300 bg-white text-[#111111] hover:bg-gray-50 cursor-pointer"
               >
-                <span>Tout afficher</span>
+                <span>{t('listings.showAll')}</span>
               </button>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredListings.map((item) => {
+            {enrichedListings.map(({ listing: item, isExact, distanceKm }) => {
               const isOwn = currentUid === item.authorId;
               const liquidityText =
                 item.liquidityType === 'cash'
@@ -487,12 +653,30 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
                       </div>
 
                       <div>
-                        <div className="text-2xl font-black font-mono-num tracking-tight text-[#111111]">
+                        <div className="text-2xl font-bold font-mono-num tracking-tight text-[#111111]">
                           {formatFcfa(item.amount)}
                         </div>
                         <p className="text-sm font-semibold text-[#004F71] mt-0.5">
                           {item.quartier}, {item.commune}
                         </p>
+
+                        {(distanceKm !== null || isExact) && (
+                          <div className="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-600">
+                            <MapPin className="w-3.5 h-3.5 text-[#004F71] shrink-0" />
+                            {distanceKm !== null ? (
+                              <span className="font-semibold font-mono-num text-[#111111]">
+                                À {formatDistance(distanceKm)} de vous{' '}
+                                <span className="font-normal text-gray-500">
+                                  ({isExact ? 'GPS exact' : 'zone commune'})
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-emerald-700 font-medium">
+                                Position GPS jointe
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {item.details && (
@@ -518,9 +702,9 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setSelectedListing(item)}
-                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#004F71] text-white hover:bg-[#003a54] whitespace-nowrap shrink-0 cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-[#004F71] text-white hover:bg-[#003a54] whitespace-nowrap shrink-0 cursor-pointer"
                     >
-                      Détails
+                      {t('listings.details')}
                     </button>
                   </div>
                 </article>
@@ -530,67 +714,65 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
         )}
       </section>
 
-      {/* Galerie terrain : échanges entre agents MTN MoMo au Bénin + workflow */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div className="space-y-1.5 max-w-2xl">
-            <div className="inline-flex items-center gap-2 text-xs font-bold text-[#004F71]">
-              <BeninFlag className="w-5 h-3.5" />
-              <span>Sur le terrain au Bénin</span>
-            </div>
-            <h2 className="text-2xl font-black font-display text-[#111111]">
-              Échanges entre agents MTN MoMo
-            </h2>
-            <p className="text-sm text-gray-600">
-              Comment les points de service MTN MoMo au Bénin s'entraident pour équilibrer cash et
-              UV en toute sécurité.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {MOMO_AGENT_SCENES.map((scene, idx) => (
-            <div
-              key={scene.src}
-              className="rounded-xl overflow-hidden border border-gray-200 bg-[#FFFDF7] flex flex-col"
-            >
-              <div className="aspect-video w-full bg-[#004F71] overflow-hidden">
-                <img
-                  src={scene.src}
-                  alt={scene.alt}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="p-4 space-y-1.5">
-                <div className="text-xs font-bold font-mono-num text-[#004F71]">
-                  0{idx + 1}. {scene.location}
+      {/* Modale Carte "Annonces autour de moi" (à la demande uniquement) */}
+      {showNearbyMapModal && userCoords && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 p-4 flex items-center justify-center overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="nearby-map-title"
+        >
+          <div className="w-full max-w-3xl rounded-2xl bg-white border border-gray-200 overflow-hidden shadow-2xl">
+            <div className="bg-[#004F71] text-white px-6 py-4 flex items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold text-[#FFCB05]">
+                  Proximité temps réel · MTN MoMo Bénin
                 </div>
-                <h3 className="text-sm font-bold text-[#111111]">{scene.title}</h3>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  {idx === 0
-                    ? 'Un agent disposant de billets FCFA rencontre un collègue ayant besoin de cash contre transfert d’UV.'
-                    : idx === 1
-                      ? 'Vérification mutuelle des montants et confirmation immédiate sur l’application MTN MoMo.'
-                      : 'Collaboration directe entre kiosques de quartiers voisins à Cotonou, Calavi, Porto-Novo et Parakou.'}
-                </p>
+                <h3 id="nearby-map-title" className="text-base sm:text-lg font-extrabold font-display">
+                  Annonces autour de votre position ({enrichedListings.length})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNearbyMapModal(false)}
+                aria-label="Fermer"
+                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <ListingLocationMap
+                mode="nearby"
+                userCoords={userCoords}
+                radiusKm={radiusKm}
+                listings={enrichedListings.map((entry) => ({
+                  listing: entry.listing,
+                  coords: entry.coords,
+                  isExact: entry.isExact,
+                  distanceKm: entry.distanceKm ?? 0,
+                }))}
+                onSelectListing={(listing) => {
+                  setShowNearbyMapModal(false);
+                  setSelectedListing(listing);
+                }}
+                heightClass="h-[360px]"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+                <span>
+                  Cliquez sur un point jaune/blanc pour ouvrir les détails de l&apos;annonce et
+                  contacter l&apos;agent.
+                </span>
+                <span className="font-mono-num font-semibold text-[#004F71]">
+                  Votre point est en bleu
+                </span>
               </div>
             </div>
-          ))}
-        </div>
-
-        <div className="p-4 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#111111] text-xs leading-relaxed flex items-start gap-3">
-          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-[#004F71]" />
-          <div>
-            <strong>Protection des agents MTN MoMo Bénin :</strong> Ne partagez jamais votre code
-            PIN MoMo, code OTP ou mot de passe. Cette plateforme met en relation les agents mais ne
-            conserve ni ne transfère les fonds. Effectuez vos remises d’espèces uniquement dans un
-            kiosque identifié.
           </div>
         </div>
-      </section>
+      )}
 
-      {/* Modale détail d'annonce */}
+      {/* Modale détail d'annonce avec position sur le site et distance entre agents */}
       {selectedListing && (
         <div
           className="fixed inset-0 z-50 bg-black/60 p-4 flex items-center justify-center overflow-y-auto"
@@ -598,9 +780,9 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
           aria-modal="true"
           aria-labelledby="listing-modal-title"
         >
-          <div className="w-full max-w-lg rounded-2xl bg-white border border-gray-200 overflow-hidden shadow-2xl">
+          <div className="w-full max-w-lg rounded-2xl bg-white border border-gray-200 overflow-hidden shadow-2xl my-auto">
             <div className="h-2 w-full bg-[#FFCB05]" />
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-4 max-h-[85vh] overflow-y-auto">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-bold text-[#004F71]">
@@ -625,6 +807,46 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
                 >
                   <X className="w-4 h-4" />
                 </button>
+              </div>
+
+              {/* Localisation sur le site + Distance entre vous et l'agent */}
+              <div className="space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="inline-flex items-center gap-1.5 font-bold text-[#111111]">
+                    <MapPin className="w-3.5 h-3.5 text-[#004F71]" />
+                    <span>
+                      {selectedListing.latitude !== undefined &&
+                      selectedListing.longitude !== undefined
+                        ? 'Position exacte sur le site'
+                        : `Localisation (${selectedListing.commune})`}
+                    </span>
+                  </div>
+
+                  {selectedListingDistance ? (
+                    <span className="font-mono-num font-bold text-[#004F71]">
+                      Distance : {formatDistance(selectedListingDistance.km)}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={locatingUser}
+                      onClick={() => requestUserLocation(false)}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-[#004F71] hover:underline disabled:opacity-50 cursor-pointer"
+                    >
+                      <LocateFixed className="w-3.5 h-3.5" />
+                      <span>
+                        {locatingUser ? 'Calcul…' : 'Voir ma position & distance'}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                <ListingLocationMap
+                  mode="detail"
+                  listing={selectedListing}
+                  userCoords={userCoords}
+                  heightClass="h-48"
+                />
               </div>
 
               <div className="p-4 rounded-xl bg-[#FFFDF7] border border-gray-200 space-y-2 text-xs">
@@ -665,7 +887,7 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
 
               <div className="p-3.5 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#111111] text-xs leading-relaxed">
                 Votre numéro WhatsApp reste protégé. Utilisez la messagerie sécurisée pour vérifier
-                les conditions et convenir d'un échange en lieu sûr.
+                les conditions et convenir d&apos;un échange en lieu sûr.
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
@@ -689,7 +911,7 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
                         onClick={() => handleStatusChange(selectedListing, 'closed')}
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border border-gray-300 bg-white hover:bg-gray-50 text-[#111111] disabled:opacity-50 cursor-pointer"
                       >
-                        <span>Clôturer l'annonce</span>
+                        <span>Clôturer l&apos;annonce</span>
                       </button>
                     )}
                     <button
@@ -714,7 +936,7 @@ export const ListingsView: React.FC<ListingsViewProps> = ({
                       className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black font-display bg-[#FFCB05] text-[#111111] hover:bg-[#f2bd00] cursor-pointer"
                     >
                       <MessageSquare className="w-4 h-4" />
-                      <span>Contacter l'agent</span>
+                      <span>Contacter l&apos;agent</span>
                     </button>
                     <div className="flex items-center gap-2">
                       {isAdmin && (

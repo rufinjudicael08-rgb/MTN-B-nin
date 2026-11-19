@@ -49,6 +49,8 @@ export interface LiquidityListing {
   quartier: string;
   details: string;
   status: ListingStatus;
+  latitude?: number;
+  longitude?: number;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -134,6 +136,16 @@ export interface AgentNotification {
   amount: number;
   intent: ListingIntent;
   read: boolean;
+  createdAt?: Timestamp;
+}
+
+export interface FavoriteAgent {
+  id: string;
+  ownerId: string;
+  favoriteAgentId: string;
+  businessName: string;
+  commune: string;
+  quartier: string;
   createdAt?: Timestamp;
 }
 

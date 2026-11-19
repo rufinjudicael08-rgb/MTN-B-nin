@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { BadgeCheck, CheckCircle2, ShieldAlert, X, XCircle } from 'lucide-react';
+import {
+  BadgeCheck,
+  CheckCircle2,
+  MessageSquare,
+  ShieldAlert,
+  Star,
+  Trash2,
+  X,
+  XCircle,
+} from 'lucide-react';
 import {
   BENIN_COMMUNES,
   FIELD_LIMITS,
@@ -10,6 +19,7 @@ import {
 import {
   AgentPrivateContact,
   AgentPublic,
+  FavoriteAgent,
   OperatorName,
   ReportItem,
   VerificationRequest,
@@ -19,9 +29,12 @@ import { BeninFlag, MtnMomoEmblem } from './MtnBrandMarks';
 interface AgentProfileModalProps {
   isOpen: boolean;
   userEmail: string;
+  userPhone?: string;
   agentProfile: AgentPublic | null;
   privateContact: AgentPrivateContact | null;
   isAdmin: boolean;
+  favorites: FavoriteAgent[];
+  allAgents: AgentPublic[];
   myVerificationRequests: VerificationRequest[];
   adminVerificationRequests: VerificationRequest[];
   adminReports: ReportItem[];
@@ -35,6 +48,8 @@ interface AgentProfileModalProps {
     bio: string;
     whatsapp: string;
   }) => Promise<void>;
+  onRemoveFavorite: (favoriteAgentId: string) => Promise<void>;
+  onContactFavorite: (fav: FavoriteAgent) => void;
   onRequestVerification: (payload: {
     requestedLevel: 'community' | 'certified';
     referenceNote: string;
@@ -49,19 +64,24 @@ interface AgentProfileModalProps {
 export const AgentProfileModal: React.FC<AgentProfileModalProps> = ({
   isOpen,
   userEmail,
+  userPhone,
   agentProfile,
   privateContact,
   isAdmin,
+  favorites,
+  allAgents,
   myVerificationRequests,
   adminVerificationRequests,
   adminReports,
   onClose,
   onSaveProfile,
+  onRemoveFavorite,
+  onContactFavorite,
   onRequestVerification,
   onModerateVerification,
   onResolveReport,
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'verify' | 'admin'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'favorites' | 'verify' | 'admin'>('profile');
   const [businessName, setBusinessName] = useState<string>('');
   const [commune, setCommune] = useState<string>('Cotonou');
   const [quartier, setQuartier] = useState<string>('Dantokpa');
@@ -73,6 +93,7 @@ export const AgentProfileModal: React.FC<AgentProfileModalProps> = ({
   const [referenceNote, setReferenceNote] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [saving, setSaving] = useState<boolean>(false);
+  const [removingFavId, setRemovingFavId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -81,10 +102,10 @@ export const AgentProfileModal: React.FC<AgentProfileModalProps> = ({
       setQuartier(agentProfile?.quartier || 'Dantokpa');
       setIsAvailable(agentProfile ? agentProfile.isAvailable : true);
       setBio(agentProfile?.bio || '');
-      setWhatsapp(privateContact?.whatsapp || '+229');
+      setWhatsapp(privateContact?.whatsapp || userPhone || '+229');
       setError('');
     }
-  }, [isOpen, agentProfile, privateContact]);
+  }, [isOpen, agentProfile, privateContact, userPhone]);
 
   if (!isOpen) return null;
 
@@ -178,7 +199,7 @@ export const AgentProfileModal: React.FC<AgentProfileModalProps> = ({
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold text-[#FFCB05]">
                 <BeninFlag className="w-4 h-3" />
-                <span>{userEmail}</span>
+                <span>{userEmail || userPhone || 'Agent MTN MoMo'}</span>
               </div>
               <h2 id="profile-modal-title" className="text-lg font-extrabold font-display">
                 {agentProfile ? 'Mon profil agent MTN MoMo' : 'Activer mon compte agent MTN MoMo'}
@@ -196,7 +217,7 @@ export const AgentProfileModal: React.FC<AgentProfileModalProps> = ({
         </div>
 
         <div className="p-6 space-y-5">
-          <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#FFFBEB] border border-[#FDE68A]">
+          <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-[#FFFBEB] border border-[#FDE68A]">
             <button
               type="button"
               onClick={() => setActiveTab('profile')}
@@ -207,6 +228,20 @@ export const AgentProfileModal: React.FC<AgentProfileModalProps> = ({
               }`}
             >
               Informations & WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('favorites')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
+                activeTab === 'favorites'
+                  ? 'bg-[#FFCB05] text-[#111111]'
+                  : 'text-gray-600 hover:text-[#111111]'
+              }`}
+            >
+              <Star className={`w-3.5 h-3.5 ${activeTab === 'favorites' ? 'fill-[#111111]' : ''}`} />
+              <span>
+                Mes favoris (<span className="font-mono-num">{favorites.length}</span>)
+              </span>
             </button>
             {agentProfile && (
               <button
@@ -366,6 +401,117 @@ export const AgentProfileModal: React.FC<AgentProfileModalProps> = ({
                 </button>
               </div>
             </form>
+          )}
+
+          {activeTab === 'favorites' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-extrabold font-display text-[#111111]">
+                    Agents MTN MoMo enregistrés en favoris
+                  </h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Retrouvez rapidement vos partenaires de confiance pour échanger du cash ou de
+                    l&apos;UV.
+                  </p>
+                </div>
+                <span className="text-xs font-bold font-mono-num text-[#004F71]">
+                  {favorites.length}/50
+                </span>
+              </div>
+
+              {favorites.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/70 p-8 text-center space-y-2">
+                  <Star className="w-7 h-7 text-[#FFCB05] fill-[#FFCB05] mx-auto" />
+                  <div className="text-sm font-bold text-[#111111]">
+                    Aucun agent favori pour le moment
+                  </div>
+                  <p className="text-xs text-gray-600 max-w-sm mx-auto">
+                    Cliquez sur « Ajouter » sur n&apos;importe quelle fiche dans l&apos;annuaire des
+                    agents MTN MoMo pour constituer votre carnet personnel.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                  {favorites.map((fav) => {
+                    const live = allAgents.find((a) => a.uid === fav.favoriteAgentId);
+                    const displayName = live?.businessName || fav.businessName;
+                    const displayQuartier = live?.quartier || fav.quartier;
+                    const displayCommune = live?.commune || fav.commune;
+                    const isBusy = removingFavId === fav.favoriteAgentId;
+
+                    return (
+                      <div
+                        key={fav.id}
+                        className="p-3.5 rounded-xl border border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Star className="w-3.5 h-3.5 text-[#111111] fill-[#FFCB05] shrink-0" />
+                            <span className="text-sm font-extrabold font-display text-[#111111] truncate">
+                              {displayName}
+                            </span>
+                            {live && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#004F71] shrink-0">
+                                <BadgeCheck className="w-3.5 h-3.5" />
+                                {VERIFICATION_LABELS[live.verificationLevel].label}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-2 text-xs text-gray-600">
+                            <span className="font-medium text-[#004F71]">
+                              {displayQuartier}, {displayCommune}
+                            </span>
+                            {live && (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span
+                                  className={
+                                    live.isAvailable
+                                      ? 'text-emerald-700 font-semibold'
+                                      : 'text-gray-500'
+                                  }
+                                >
+                                  {live.isAvailable ? 'Ouvert aux échanges' : 'Indisponible'}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onContactFavorite(fav)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#004F71] text-white hover:bg-[#003a54] cursor-pointer"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>Contacter</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={async () => {
+                              setRemovingFavId(fav.favoriteAgentId);
+                              try {
+                                await onRemoveFavorite(fav.favoriteAgentId);
+                              } finally {
+                                setRemovingFavId(null);
+                              }
+                            }}
+                            title="Retirer des favoris"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 text-red-700 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Retirer</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {activeTab === 'verify' && agentProfile && (

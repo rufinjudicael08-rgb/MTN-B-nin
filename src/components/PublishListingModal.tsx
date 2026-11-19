@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { ShieldAlert, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { LocateFixed, MapPin, ShieldAlert, Trash2, X } from 'lucide-react';
 import {
   BENIN_COMMUNES,
   FIELD_LIMITS,
   containsSensitiveSecret,
+  getCommuneCoords,
 } from '../data/beninGeo';
 import {
   AgentPublic,
@@ -11,6 +12,7 @@ import {
   ListingIntent,
   OperatorName,
 } from '../types';
+import { GeoCoords, ListingLocationMap } from './ListingLocationMap';
 import { BeninFlag, MtnMomoEmblem } from './MtnBrandMarks';
 
 interface PublishListingModalProps {
@@ -25,6 +27,8 @@ interface PublishListingModalProps {
     commune: string;
     quartier: string;
     details: string;
+    latitude?: number;
+    longitude?: number;
   }) => Promise<void>;
 }
 
@@ -40,12 +44,51 @@ export const PublishListingModal: React.FC<PublishListingModalProps> = ({
   const [commune, setCommune] = useState<string>(agentProfile?.commune || 'Abomey-Calavi');
   const [quartier, setQuartier] = useState<string>(agentProfile?.quartier || 'Tankpè');
   const [details, setDetails] = useState<string>('');
+  const [pickedCoords, setPickedCoords] = useState<GeoCoords | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState<boolean>(false);
+  const [locating, setLocating] = useState<boolean>(false);
+  const [geoError, setGeoError] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen && agentProfile) {
+      setCommune(agentProfile.commune);
+      setQuartier(agentProfile.quartier);
+    }
+  }, [isOpen, agentProfile]);
 
   if (!isOpen) return null;
 
   const communeObj = BENIN_COMMUNES.find((c) => c.name === commune);
+  const [communeLat, communeLng] = getCommuneCoords(commune);
+
+  const handleCaptureGps = () => {
+    setGeoError('');
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      setGeoError('La géolocalisation GPS n’est pas disponible sur cet appareil.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setPickedCoords({
+          lat: Number(pos.coords.latitude.toFixed(6)),
+          lng: Number(pos.coords.longitude.toFixed(6)),
+        });
+        setLocating(false);
+      },
+      (err) => {
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGeoError('Autorisation GPS refusée. Vous pouvez placer votre position sur la carte.');
+        } else {
+          setGeoError('Position GPS introuvable. Utilisez « Placer sur la carte » ci-dessous.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,8 +135,13 @@ export const PublishListingModal: React.FC<PublishListingModalProps> = ({
         commune: cleanCommune,
         quartier: cleanQuartier,
         details: cleanDetails,
+        ...(pickedCoords
+          ? { latitude: pickedCoords.lat, longitude: pickedCoords.lng }
+          : {}),
       });
       setDetails('');
+      setPickedCoords(null);
+      setShowMapPicker(false);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible d'enregistrer l'annonce.");
@@ -109,7 +157,7 @@ export const PublishListingModal: React.FC<PublishListingModalProps> = ({
       aria-modal="true"
       aria-labelledby="publish-modal-title"
     >
-      <div className="w-full max-w-xl rounded-2xl bg-white border border-gray-200 overflow-hidden shadow-2xl">
+      <div className="w-full max-w-xl rounded-2xl bg-white border border-gray-200 overflow-hidden shadow-2xl my-auto">
         <div className="bg-[#004F71] text-white px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <MtnMomoEmblem size="sm" />
@@ -133,7 +181,7 @@ export const PublishListingModal: React.FC<PublishListingModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleFormSubmit} className="p-6 space-y-4 max-h-[82vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">
@@ -226,12 +274,81 @@ export const PublishListingModal: React.FC<PublishListingModalProps> = ({
             </div>
           </div>
 
+          {/* Ajout de localisation GPS pour calculer la distance avec les autres agents */}
+          <div className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/70 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-xs font-bold text-[#111111]">
+                  Ma localisation pour l&apos;annonce
+                </div>
+                <p className="text-[11px] text-gray-600">
+                  Permet aux autres agents de voir votre position et la distance exacte qui vous
+                  sépare.
+                </p>
+              </div>
+              {pickedCoords && (
+                <button
+                  type="button"
+                  onClick={() => setPickedCoords(null)}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 hover:underline cursor-pointer"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Effacer</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={locating}
+                onClick={handleCaptureGps}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-[#004F71] text-white hover:bg-[#003a54] disabled:opacity-50 cursor-pointer"
+              >
+                <LocateFixed className="w-3.5 h-3.5 text-[#FFCB05]" />
+                <span>{locating ? 'Localisation…' : 'Utiliser ma position GPS'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowMapPicker((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-gray-300 bg-white text-[#111111] hover:bg-gray-100 cursor-pointer"
+              >
+                <MapPin className="w-3.5 h-3.5 text-[#004F71]" />
+                <span>{showMapPicker ? 'Masquer la carte' : 'Placer sur la carte'}</span>
+              </button>
+            </div>
+
+            {pickedCoords && (
+              <div className="text-xs font-medium text-emerald-700 font-mono-num">
+                Position enregistrée : {pickedCoords.lat.toFixed(5)}, {pickedCoords.lng.toFixed(5)}
+              </div>
+            )}
+
+            {geoError && <div className="text-xs font-medium text-red-700">{geoError}</div>}
+
+            {showMapPicker && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-gray-500">
+                  Touchez ou cliquez sur l&apos;emplacement exact de votre kiosque sur la carte :
+                </p>
+                <ListingLocationMap
+                  mode="picker"
+                  centerCoords={{ lat: communeLat, lng: communeLng }}
+                  pickedCoords={pickedCoords}
+                  onPickCoords={setPickedCoords}
+                  heightClass="h-44"
+                />
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">
               Précisions facultatives ({details.length}/{FIELD_LIMITS.listingDetailsMax})
             </label>
             <textarea
-              rows={3}
+              rows={2}
               maxLength={FIELD_LIMITS.listingDetailsMax}
               value={details}
               onChange={(e) => setDetails(e.target.value)}
