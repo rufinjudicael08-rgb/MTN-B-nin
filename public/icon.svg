@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#FFCB05"/>
+  <rect x="44" y="136" width="424" height="240" rx="120" fill="#004F71" stroke="#111111" stroke-width="14"/>
+  <text x="256" y="286" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-weight="900" font-size="112" letter-spacing="-3" fill="#FFCB05">MoMo</text>
+  <circle cx="404" cy="148" r="26" fill="#008751"/>
+</svg>

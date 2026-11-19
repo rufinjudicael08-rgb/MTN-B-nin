@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+    --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    /* Palette officielle MTN Bénin & MTN MoMo App */
+    --mtn-yellow: #ffcb05;
+    --mtn-yellow-hover: #f2bd00;
+    --mtn-blue: #004f71;
+    --mtn-blue-deep: #00334a;
+    --mtn-black: #111111;
+
+    --canvas: #f7f8fa;
+    --surface: #ffffff;
+    --surface-subtle: #fffbeb;
+    --border-hairline: #e5e7eb;
+    --ink-primary: #111111;
+    --ink-secondary: #374151;
+    --ink-muted: #6b7280;
+
+    --brand-primary: #ffcb05;
+    --brand-primary-hover: #f2bd00;
+    --brand-on-primary: #111111;
+    --brand-accent: #004f71;
+    --brand-accent-soft: #e6f2f7;
+    --brand-accent-ink: #004f71;
+    --brand-ring: rgba(255, 203, 5, 0.5);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-family: var(--font-body);
+    color: var(--ink-primary);
+    background-color: var(--canvas);
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes momoBackdropPan {
+  0% {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.06) translate3d(-1.2%, -0.8%, 0);
+  }
+  100% {
+    transform: scale(1.02) translate3d(0.8%, 0.4%, 0);
+  }
+}
+
+.momo-ken-burns {
+  animation: momoBackdropPan 14s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .momo-ken-burns {
+    animation: none;
+  }
+}

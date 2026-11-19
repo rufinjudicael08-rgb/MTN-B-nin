@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#102a43">
+<title>CASH CONNECT BÉNIN — Trouver une disponibilité près de vous</title>
+<style>
+:root{--navy:#102a43;--blue:#1769aa;--teal:#0f9d8a;--gold:#f4b942;--ink:#172b4d;--muted:#64748b;--bg:#f4f7fb;--line:#e2e8f0;--white:#fff;--red:#b42318}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+a{color:inherit}.wrap{width:min(1120px,92%);margin:auto}
+header{background:var(--navy);color:white;position:sticky;top:0;z-index:10;box-shadow:0 4px 20px #102a4320}
+.nav{height:72px;display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{display:flex;align-items:center;gap:11px;font-weight:850;letter-spacing:.3px}.logo{width:40px;height:40px;border-radius:13px;background:linear-gradient(135deg,var(--teal),#62d6c5);display:grid;place-items:center;color:#062d35;font-weight:900;font-size:20px}.brand small{display:block;font-size:10px;letter-spacing:1.7px;color:#b9d3e7;font-weight:600}.navlinks{display:flex;gap:22px;align-items:center;font-size:14px}.navlinks a{text-decoration:none;color:#e5eef7}.navlinks a:hover{color:#8ee4d7}.btn{border:0;border-radius:12px;padding:12px 17px;font-weight:750;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:14px}.btn-primary{background:var(--teal);color:white}.btn-light{background:white;color:var(--navy)}.btn-outline{border:1px solid #cbd5e1;background:white;color:var(--ink)}
+.hero{background:radial-gradient(circle at 85% 20%,#1c6482 0,transparent 30%),linear-gradient(120deg,#102a43,#174b67);color:white;padding:76px 0 68px}.hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:42px;align-items:center}.eyebrow{color:#83e2d3;text-transform:uppercase;letter-spacing:2px;font-size:11px;font-weight:800}.hero h1{font-size:clamp(36px,5vw,58px);line-height:1.04;letter-spacing:-1.8px;margin:16px 0}.hero p{color:#d5e4ef;max-width:590px;font-size:17px}.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}.hero-note{font-size:12px!important;color:#b9d3e7!important;margin-top:16px}
+.mock-card{background:white;color:var(--ink);padding:22px;border-radius:22px;box-shadow:0 25px 70px #061b2c66;transform:rotate(1deg)}.mock-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:17px}.live{font-size:11px;background:#e8faf5;color:#087b67;padding:6px 9px;border-radius:99px;font-weight:800}.mock-row{border:1px solid var(--line);padding:13px;border-radius:13px;margin:10px 0;display:flex;justify-content:space-between;gap:12px}.mock-row b{display:block}.mock-row small{color:var(--muted)}.amount{font-weight:850;color:var(--teal);white-space:nowrap}.pill{font-size:11px;border-radius:7px;padding:4px 7px;background:#eef4fa;color:#36536b}
+section{padding:66px 0}.section-head{text-align:center;max-width:680px;margin:0 auto 30px}.section-head h2{font-size:32px;letter-spacing:-.8px;margin:7px 0}.section-head p{color:var(--muted);margin:0}.eyebrow-dark{color:var(--teal);font-size:11px;font-weight:850;letter-spacing:1.8px;text-transform:uppercase}
+.panel{background:white;border:1px solid var(--line);border-radius:20px;padding:24px;box-shadow:0 8px 28px #17324d0a}.search-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:12px;align-items:end}.field label{display:block;font-size:12px;font-weight:750;margin-bottom:7px}.field input,.field select,.field textarea{width:100%;border:1px solid #cbd5e1;border-radius:11px;padding:12px 13px;background:white;color:var(--ink);font:inherit;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px #0f9d8a18}.hint{font-size:11px;color:var(--muted);margin-top:7px}
+.results-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:28px 0 14px}.results-head h3{margin:0}.demo-label{font-size:11px;font-weight:800;color:#9a5b00;background:#fff4d8;padding:6px 9px;border-radius:99px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}.listing{background:white;border:1px solid var(--line);border-radius:16px;padding:18px}.listing-top{display:flex;justify-content:space-between;gap:8px;align-items:start}.operator{font-size:11px;font-weight:800;border-radius:7px;padding:5px 8px;background:#eef4fa}.listing h4{font-size:22px;margin:14px 0 2px}.listing p{color:var(--muted);font-size:13px;margin:0 0 13px}.listing-foot{border-top:1px solid var(--line);padding-top:12px;display:flex;justify-content:space-between;align-items:center}.status{font-size:11px;color:#087b67;font-weight:800}.small-btn{font-size:12px;padding:8px 11px}
+.empty{display:none;text-align:center;padding:30px;color:var(--muted);background:white;border:1px dashed #cbd5e1;border-radius:14px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.step{padding:23px;background:white;border:1px solid var(--line);border-radius:17px}.num{width:36px;height:36px;border-radius:11px;background:#e5f7f4;color:#087b67;display:grid;place-items:center;font-weight:900}.step h3{margin:13px 0 5px}.step p{color:var(--muted);font-size:14px;margin:0}
+.operators{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}.operator-chip{background:white;border:1px solid var(--line);border-radius:12px;padding:12px 17px;font-weight:800}
+.notice{background:#fff8e8;border:1px solid #f4d58c;color:#684b12;border-radius:15px;padding:17px;font-size:13px}.notice strong{display:block;margin-bottom:4px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.full{grid-column:1/-1}.form-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+footer{background:#0b2033;color:#d2dfeb;padding:34px 0}.footer-grid{display:flex;justify-content:space-between;gap:25px;align-items:start}.footer-grid p{font-size:12px;color:#a9bfd0;max-width:600px}.footer-brand{font-weight:850}
+.modal{display:none;position:fixed;inset:0;background:#071827bb;z-index:30;padding:20px;overflow:auto}.modal.show{display:grid;place-items:center}.modal-box{background:white;border-radius:20px;padding:24px;width:min(560px,100%);position:relative}.close{position:absolute;right:15px;top:12px;border:0;background:#eef2f6;border-radius:9px;padding:7px 10px;cursor:pointer}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#102a43;color:white;padding:12px 18px;border-radius:12px;display:none;z-index:40;box-shadow:0 8px 30px #0003;font-size:13px}
+@media(max-width:800px){.hero-grid{grid-template-columns:1fr}.mock-card{transform:none;max-width:500px}.search-grid{grid-template-columns:1fr 1fr}.cards{grid-template-columns:1fr 1fr}.steps{grid-template-columns:1fr}.navlinks{display:none}}
+@media(max-width:520px){.hero{padding:55px 0}.search-grid,.cards,.form-grid{grid-template-columns:1fr}.full{grid-column:auto}.panel{padding:17px}.results-head{align-items:start;flex-direction:column}.footer-grid{flex-direction:column}}
+</style>
+</head>
+<body>
+<header><div class="wrap nav">
+ <div class="brand"><div class="logo">C↔</div><div>CASH CONNECT<small>BÉNIN · PLATEFORME DE MISE EN RELATION</small></div></div>
+ <nav class="navlinks"><a href="#recherche">Trouver du cash</a><a href="#publier">Publier une disponibilité</a><a href="#fonctionnement">Comment ça marche</a></nav>
+ <a class="btn btn-primary" href="#publier">Commencer</a>
+</div></header>
+<main>
+<section class="hero"><div class="wrap hero-grid">
+ <div><div class="eyebrow">Une mise en relation plus simple</div>
+ <h1>La liquidité recherchée.<br><span style="color:#79dfd0">Au bon endroit.</span></h1>
+ <p>Consultez les disponibilités signalées près de vous ou indiquez le montant que vous pouvez proposer. CASH CONNECT BÉNIN facilite la mise en contact entre utilisateurs.</p>
+ <div class="hero-actions"><a class="btn btn-primary" href="#recherche">Trouver une disponibilité →</a><a class="btn btn-light" href="#publier">Publier une offre</a></div>
+ <p class="hero-note">MTN MoMo · Moov Money · Celtiis Cash — disponibilité déclarée par les utilisateurs.</p></div>
+ <div class="mock-card"><div class="mock-top"><b>Disponibilités près de vous</b><span class="live">● EXEMPLE</span></div>
+ <div class="mock-row"><div><b>Tankpè · MTN MoMo</b><small>Disponibilité déclarée · il y a 8 min</small></div><div class="amount">50 000 F</div></div>
+ <div class="mock-row"><div><b>Calavi · Moov Money</b><small>Disponibilité déclarée · il y a 14 min</small></div><div class="amount">25 000 F</div></div>
+ <div class="mock-row"><div><b>Akpakpa · Celtiis Cash</b><small>Disponibilité déclarée · il y a 21 min</small></div><div class="amount">75 000 F</div></div>
+ <div style="font-size:11px;color:#64748b;margin-top:14px">Données fictives de démonstration — aucune offre réelle confirmée.</div></div>
+</div></section>
+
+<section id="recherche"><div class="wrap">
+ <div class="section-head"><div class="eyebrow-dark">Recherche rapide</div><h2>Que recherchez-vous ?</h2><p>Filtrez les disponibilités déclarées selon le montant, le quartier et l'opérateur.</p></div>
+ <div class="panel"><div class="search-grid">
+  <div class="field"><label>Montant souhaité (FCFA)</label><input id="amountFilter" type="number" min="1" placeholder="Ex. 25000"></div>
+  <div class="field"><label>Quartier / commune</label><input id="areaFilter" placeholder="Ex. Tankpè, Calavi"></div>
+  <div class="field"><label>Opérateur</label><select id="operatorFilter"><option value="">Tous les opérateurs</option><option>MTN MoMo</option><option>Moov Money</option><option>Celtiis Cash</option></select></div>
+  <button class="btn btn-primary" onclick="filterListings()">Rechercher</button>
+ </div><div class="hint">Les résultats de cette démo sont fictifs. Une disponibilité doit toujours être reconfirmée avant tout déplacement.</div></div>
+ <div class="results-head"><h3>Exemples de disponibilités</h3><span class="demo-label">MODE DÉMONSTRATION</span></div>
+ <div class="cards" id="cards">
+  <article class="listing" data-amount="50000" data-area="tankpe" data-op="MTN MoMo"><div class="listing-top"><span class="operator">MTN MoMo</span><span class="status">● Déclaré disponible</span></div><h4>50 000 FCFA</h4><p>Tankpè, Abomey-Calavi · Exemple fictif</p><div class="listing-foot"><small>Actualisation simulée</small><button class="btn btn-outline small-btn" onclick="openContact('MTN MoMo','Tankpè','50 000 FCFA')">Détails</button></div></article>
+  <article class="listing" data-amount="25000" data-area="calavi" data-op="Moov Money"><div class="listing-top"><span class="operator">Moov Money</span><span class="status">● Déclaré disponible</span></div><h4>25 000 FCFA</h4><p>Calavi, Atlantique · Exemple fictif</p><div class="listing-foot"><small>Actualisation simulée</small><button class="btn btn-outline small-btn" onclick="openContact('Moov Money','Calavi','25 000 FCFA')">Détails</button></div></article>
+  <article class="listing" data-amount="75000" data-area="akpakpa" data-op="Celtiis Cash"><div class="listing-top"><span class="operator">Celtiis Cash</span><span class="status">● Déclaré disponible</span></div><h4>75 000 FCFA</h4><p>Akpakpa, Cotonou · Exemple fictif</p><div class="listing-foot"><small>Actualisation simulée</small><button class="btn btn-outline small-btn" onclick="openContact('Celtiis Cash','Akpakpa','75 000 FCFA')">Détails</button></div></article>
+ </div><div class="empty" id="empty">Aucun exemple ne correspond à ces filtres. Essayez un autre quartier ou montant.</div>
+</div></section>
+
+<section id="fonctionnement" style="background:#edf3f8"><div class="wrap">
+ <div class="section-head"><div class="eyebrow-dark">Simple et transparent</div><h2>Comment ça marche ?</h2><p>La plateforme organise les annonces et facilite le contact. Elle ne détient pas les fonds.</p></div>
+ <div class="steps">
+  <div class="step"><div class="num">01</div><h3>Publiez votre besoin</h3><p>Indiquez le montant, l'opérateur concerné et une zone approximative. Ne publiez jamais votre code PIN ou vos identifiants.</p></div>
+  <div class="step"><div class="num">02</div><h3>Trouvez une correspondance</h3><p>Consultez les annonces correspondant à votre recherche et vérifiez que l'information est toujours valable.</p></div>
+  <div class="step"><div class="num">03</div><h3>Prenez contact prudemment</h3><p>Échangez uniquement après vérification. Ne payez aucun frais à un inconnu et privilégiez les canaux officiels des opérateurs.</p></div>
+ </div>
+ <div class="operators" style="margin-top:25px"><span class="operator-chip">MTN MoMo</span><span class="operator-chip">Moov Money</span><span class="operator-chip">Celtiis Cash</span></div>
+</div></section>
+
+<section id="publier"><div class="wrap">
+ <div class="section-head"><div class="eyebrow-dark">Contribuer au réseau</div><h2>Signaler une disponibilité</h2><p>Publiez une annonce indicative. Elle sera soumise à vérification avant toute diffusion publique.</p></div>
+ <div class="panel" style="max-width:760px;margin:auto">
+  <form id="publishForm">
+   <div class="form-grid">
+    <div class="field"><label>Je souhaite</label><select id="intent" required><option value="">Choisir…</option><option>Proposer une disponibilité</option><option>Rechercher des liquidités</option></select></div>
+    <div class="field"><label>Opérateur concerné</label><select id="operator" required><option value="">Choisir…</option><option>MTN MoMo</option><option>Moov Money</option><option>Celtiis Cash</option><option>Autre / à préciser</option></select></div>
+    <div class="field"><label>Montant (FCFA)</label><input id="amount" type="number" min="500" step="500" required placeholder="Ex. 25000"></div>
+    <div class="field"><label>Quartier / commune</label><input id="area" required placeholder="Ex. Tankpè, Abomey-Calavi"></div>
+    <div class="field"><label>Nom ou pseudonyme</label><input id="name" required maxlength="40" placeholder="Votre nom d'affichage"></div>
+    <div class="field"><label>Contact (WhatsApp)</label><input id="phone" type="tel" required placeholder="+229 …"></div>
+    <div class="field full"><label>Précisions (facultatif)</label><textarea id="details" rows="3" maxlength="300" placeholder="Disponibilité et conditions, sans donnée confidentielle."></textarea></div>
+   </div>
+   <div class="notice" style="margin-top:16px"><strong>Protection et sécurité</strong>Ne renseignez jamais de PIN, mot de passe, code OTP ou numéro complet de portefeuille. Cette maquette ne vérifie pas les identités et ne traite aucun paiement. Ne rencontrez pas un inconnu dans un lieu isolé.</div>
+   <div class="form-actions"><button class="btn btn-primary" type="submit">Préparer mon annonce</button><button class="btn btn-outline" type="reset">Effacer</button></div>
+   <p class="hint">Démo locale : le formulaire prépare un message WhatsApp, mais n'enregistre pas encore les annonces sur un serveur.</p>
+  </form>
+ </div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap"><div class="notice"><strong>Important — statut du service</strong>CASH CONNECT BÉNIN est ici une maquette de mise en relation, non un service financier agréé. Les annonces d'exemple sont fictives. Avant un lancement public, il faudra vérifier le cadre applicable auprès des autorités compétentes et des opérateurs, obtenir les autorisations/partenariats nécessaires, mettre en place la vérification des utilisateurs, la modération et un stockage sécurisé des données. La plateforme ne doit ni conserver l'argent des utilisateurs ni se présenter comme un agent officiel d'un opérateur.</div></div></section>
+</main>
+<footer><div class="wrap footer-grid"><div><div class="footer-brand">CASH CONNECT BÉNIN</div><p>Une plateforme indépendante de mise en relation autour des disponibilités de liquidités. Non affiliée à MTN, Moov Africa ou Celtiis.</p></div><div><b style="font-size:13px">Contact projet</b><p>Contact à configurer avant publication.<br>© 2026 CASH CONNECT BÉNIN</p></div></div></footer>
+
+<div class="modal" id="contactModal"><div class="modal-box"><button class="close" onclick="closeModal()">✕</button><div class="eyebrow-dark">Détails de l'annonce</div><h2 id="modalTitle">Disponibilité</h2><p id="modalText" style="color:#64748b"></p><div class="notice">Dans la version réelle, le contact ne sera révélé qu'après vérification et consentement. Les annonces de cette page sont fictives.</div><button class="btn btn-primary" style="margin-top:15px" onclick="closeModal()">Compris</button></div></div>
+<div class="toast" id="toast"></div>
+<script>
+function filterListings(){
+ const amount=Number(document.getElementById('amountFilter').value||0);
+ const area=document.getElementById('areaFilter').value.trim().toLowerCase();
+ const op=document.getElementById('operatorFilter').value;
+ let visible=0;
+ document.querySelectorAll('.listing').forEach(card=>{
+  const ok=(!amount||Number(card.dataset.amount)>=amount)&&(!area||card.dataset.area.includes(area)||card.textContent.toLowerCase().includes(area))&&(!op||card.dataset.op===op);
+  card.style.display=ok?'block':'none'; if(ok)visible++;
+ });
+ document.getElementById('empty').style.display=visible?'none':'block';
+}
+function openContact(op,area,amount){
+ document.getElementById('modalTitle').textContent=amount+' · '+op;
+ document.getElementById('modalText').textContent='Zone : '+area+'. Cette disponibilité est un exemple fictif et ne constitue pas une offre réelle.';
+ document.getElementById('contactModal').classList.add('show');
+}
+function closeModal(){document.getElementById('contactModal').classList.remove('show')}
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',4500)}
+document.getElementById('publishForm').addEventListener('submit',e=>{
+ e.preventDefault();
+ const data={
+ intent:document.getElementById('intent').value,
+ operator:document.getElementById('operator').value,
+ amount:document.getElementById('amount').value,
+ area:document.getElementById('area').value,
+ name:document.getElementById('name').value,
+ phone:document.getElementById('phone').value,
+ details:document.getElementById('details').value
+ };
+ const msg=`Bonjour CASH CONNECT BÉNIN,%0AJe souhaite publier une annonce de démonstration :%0AType : ${encodeURIComponent(data.intent)}%0AOpérateur : ${encodeURIComponent(data.operator)}%0AMontant : ${encodeURIComponent(data.amount)} FCFA%0AZone : ${encodeURIComponent(data.area)}%0ANom : ${encodeURIComponent(data.name)}%0AContact : ${encodeURIComponent(data.phone)}%0APrécisions : ${encodeURIComponent(data.details)}%0A%0AMerci de m'indiquer la procédure de vérification.`;
+ toast('Annonce préparée. Configurez le numéro WhatsApp officiel pour recevoir les demandes.');
+ // No destination phone configured intentionally: avoid sending personal data to an unknown number.
+ console.log('Message à connecter à un numéro WhatsApp officiel :',decodeURIComponent(msg));
+});
+</script>
+</body></html>

@@ -1,0 +1,578 @@
+{
+  "entities": {
+    "AgentPublic": {
+      "title": "AgentPublic",
+      "description": "Profil public d'un agent Mobile Money opérant au Bénin (sans données personnelles sensibles).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "businessName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "commune": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 50
+        },
+        "quartier": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "operators": {
+          "type": "array",
+          "description": "Liste des réseaux opérés au Bénin (1 à 3 parmi MTN MoMo, Moov Money, Celtiis Cash)."
+        },
+        "verificationLevel": {
+          "type": "string",
+          "enum": ["standard", "community", "certified"]
+        },
+        "isAvailable": {
+          "type": "boolean"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "businessName",
+        "commune",
+        "quartier",
+        "operators",
+        "verificationLevel",
+        "isAvailable",
+        "isPublic",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AgentPrivateContact": {
+      "title": "AgentPrivateContact",
+      "description": "Coordonnées privées isolées d'un agent (numéro WhatsApp béninois et e-mail).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "whatsapp": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 20,
+          "pattern": "^\\+?229[0-9]{8,10}$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 120
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "whatsapp", "email", "updatedAt"]
+    },
+    "LiquidityListing": {
+      "title": "LiquidityListing",
+      "description": "Annonce temps réel de disponibilité ou de besoin en liquidités au Bénin.",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "authorVerification": {
+          "type": "string",
+          "enum": ["standard", "community", "certified"]
+        },
+        "intent": {
+          "type": "string",
+          "enum": ["offer", "request"]
+        },
+        "liquidityType": {
+          "type": "string",
+          "enum": ["cash", "uv", "both"]
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["MTN MoMo", "Moov Money", "Celtiis Cash"]
+        },
+        "amount": {
+          "type": "number"
+        },
+        "commune": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 50
+        },
+        "quartier": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "matched", "closed"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "authorId",
+        "authorName",
+        "authorVerification",
+        "intent",
+        "liquidityType",
+        "operator",
+        "amount",
+        "commune",
+        "quartier",
+        "details",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Fil de mise en relation directe entre deux agents authentifiés.",
+      "type": "object",
+      "properties": {
+        "participantIds": {
+          "type": "array",
+          "description": "Exactement 2 identifiants UID d'agents."
+        },
+        "initiatorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "recipientId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "initiatorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "recipientName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "listingId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "listingSummary": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "initiatorWhatsapp": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "recipientWhatsapp": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "lastMessage": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "participantIds",
+        "initiatorId",
+        "recipientId",
+        "initiatorName",
+        "recipientName",
+        "listingId",
+        "listingSummary",
+        "lastMessage",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Message horodaté dans une conversation entre deux agents.",
+      "type": "object",
+      "properties": {
+        "senderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "participantIds": {
+          "type": "array"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["senderId", "senderName", "participantIds", "body", "createdAt"]
+    },
+    "VerificationRequest": {
+      "title": "VerificationRequest",
+      "description": "Demande d'élévation du niveau de vérification d'un agent.",
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "businessName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "requestedLevel": {
+          "type": "string",
+          "enum": ["community", "certified"]
+        },
+        "commune": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 50
+        },
+        "referenceNote": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 300
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "agentId",
+        "businessName",
+        "requestedLevel",
+        "commune",
+        "referenceNote",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Signalement d'annonce ou de comportement suspect.",
+      "type": "object",
+      "properties": {
+        "reporterId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetType": {
+          "type": "string",
+          "enum": ["listing", "agent"]
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 80
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "reviewed", "resolved"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "reporterId",
+        "targetType",
+        "targetId",
+        "reason",
+        "details",
+        "status",
+        "createdAt"
+      ]
+    },
+    "FcmToken": {
+      "title": "FcmToken",
+      "description": "Jeton Firebase Cloud Messaging privé d'un agent pour recevoir des notifications push.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 512
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "token", "platform", "updatedAt"]
+    },
+    "AlertRule": {
+      "title": "AlertRule",
+      "description": "Critères d'alerte configurés par un agent MTN MoMo au Bénin.",
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "commune": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "quartier": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "intent": {
+          "type": "string",
+          "enum": ["all", "offer", "request"]
+        },
+        "liquidityType": {
+          "type": "string",
+          "enum": ["all", "cash", "uv", "both"]
+        },
+        "minAmount": {
+          "type": "number"
+        },
+        "maxAmount": {
+          "type": "number"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "agentId",
+        "commune",
+        "quartier",
+        "intent",
+        "liquidityType",
+        "minAmount",
+        "maxAmount",
+        "enabled",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AgentNotification": {
+      "title": "AgentNotification",
+      "description": "Alerte temps réel reçue lorsqu'une annonce correspond aux besoins d'un agent.",
+      "type": "object",
+      "properties": {
+        "recipientId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "listingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "body": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 220
+        },
+        "commune": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 50
+        },
+        "quartier": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "amount": {
+          "type": "number"
+        },
+        "intent": {
+          "type": "string",
+          "enum": ["offer", "request"]
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "recipientId",
+        "listingId",
+        "title",
+        "body",
+        "commune",
+        "quartier",
+        "amount",
+        "intent",
+        "read",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/agents_public/{agentId}": {
+      "schema": { "$ref": "#/entities/AgentPublic" },
+      "description": "Profils publics des agents Mobile Money au Bénin."
+    },
+    "/agents_public/{agentId}/private/contact": {
+      "schema": { "$ref": "#/entities/AgentPrivateContact" },
+      "description": "Données personnelles isolées (WhatsApp et e-mail) accessibles uniquement au propriétaire ou à l'administrateur."
+    },
+    "/agents_public/{agentId}/fcm_tokens/{tokenId}": {
+      "schema": { "$ref": "#/entities/FcmToken" },
+      "description": "Jetons FCM privés de l'agent pour les notifications push."
+    },
+    "/agents_public/{agentId}/alert_rules/{ruleId}": {
+      "schema": { "$ref": "#/entities/AlertRule" },
+      "description": "Règles d'alerte personnalisées de l'agent."
+    },
+    "/agents_public/{agentId}/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/AgentNotification" },
+      "description": "Centre d'alertes temps réel de l'agent."
+    },
+    "/listings/{listingId}": {
+      "schema": { "$ref": "#/entities/LiquidityListing" },
+      "description": "Annonces actives et archivées d'offres et de besoins en liquidités."
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Conversations privées de mise en relation entre deux agents."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages temps réel d'une conversation."
+    },
+    "/verification_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/VerificationRequest" },
+      "description": "Demandes de vérification de statut agent."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Signalements de sécurité et de fraude."
+    }
+  }
+}

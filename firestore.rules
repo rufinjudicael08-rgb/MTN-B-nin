@@ -1,0 +1,496 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'lokossoujudicael00@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidOperator(op) {
+      return op in ['MTN MoMo', 'Moov Money', 'Celtiis Cash'];
+    }
+
+    function isValidOperatorsList(ops) {
+      return ops is list &&
+        ops.size() >= 1 &&
+        ops.size() <= 3 &&
+        ops[0] is string &&
+        ops.hasOnly(['MTN MoMo', 'Moov Money', 'Celtiis Cash']);
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidAgentPublic(data, agentId) {
+      return data.keys().hasAll([
+          'uid', 'businessName', 'commune', 'quartier', 'operators',
+          'verificationLevel', 'isAvailable', 'isPublic', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'businessName', 'commune', 'quartier', 'operators',
+          'verificationLevel', 'isAvailable', 'isPublic', 'bio', 'createdAt', 'updatedAt'
+        ]) &&
+        data.uid is string && data.uid == agentId && isValidId(data.uid) &&
+        data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 60 &&
+        data.commune is string && data.commune.size() >= 2 && data.commune.size() <= 50 &&
+        data.quartier is string && data.quartier.size() >= 2 && data.quartier.size() <= 60 &&
+        isValidOperatorsList(data.operators) &&
+        data.verificationLevel in ['standard', 'community', 'certified'] &&
+        data.isAvailable is bool &&
+        data.isPublic is bool &&
+        (!('bio' in data) || (data.bio is string && data.bio.size() <= 240)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateContact(data, agentId) {
+      return data.keys().hasAll(['uid', 'whatsapp', 'email', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'whatsapp', 'email', 'updatedAt']) &&
+        data.uid is string && data.uid == agentId && isValidId(data.uid) &&
+        data.whatsapp is string && data.whatsapp.size() >= 8 && data.whatsapp.size() <= 20 &&
+        data.whatsapp.matches('^\\+?229[0-9]{8,10}$') &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 120 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidListing(data) {
+      return data.keys().hasAll([
+          'authorId', 'authorName', 'authorVerification', 'intent', 'liquidityType',
+          'operator', 'amount', 'commune', 'quartier', 'details', 'status',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'authorId', 'authorName', 'authorVerification', 'intent', 'liquidityType',
+          'operator', 'amount', 'commune', 'quartier', 'details', 'status',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.authorId is string && isValidId(data.authorId) &&
+        data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60 &&
+        data.authorVerification in ['standard', 'community', 'certified'] &&
+        data.intent in ['offer', 'request'] &&
+        data.liquidityType in ['cash', 'uv', 'both'] &&
+        isValidOperator(data.operator) &&
+        (data.amount is int || data.amount is float) && data.amount >= 500 && data.amount <= 25000000 &&
+        data.commune is string && data.commune.size() >= 2 && data.commune.size() <= 50 &&
+        data.quartier is string && data.quartier.size() >= 2 && data.quartier.size() <= 60 &&
+        data.details is string && data.details.size() <= 300 &&
+        data.status in ['active', 'matched', 'closed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidConversation(data) {
+      return data.keys().hasAll([
+          'participantIds', 'initiatorId', 'recipientId', 'initiatorName',
+          'recipientName', 'listingId', 'listingSummary', 'lastMessage',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'participantIds', 'initiatorId', 'recipientId', 'initiatorName',
+          'recipientName', 'listingId', 'listingSummary', 'initiatorWhatsapp',
+          'recipientWhatsapp', 'lastMessage', 'createdAt', 'updatedAt'
+        ]) &&
+        data.participantIds is list && data.participantIds.size() == 2 &&
+        data.participantIds[0] is string && isValidId(data.participantIds[0]) &&
+        data.participantIds[1] is string && isValidId(data.participantIds[1]) &&
+        data.participantIds[0] != data.participantIds[1] &&
+        data.initiatorId is string && isValidId(data.initiatorId) &&
+        data.recipientId is string && isValidId(data.recipientId) &&
+        data.initiatorId != data.recipientId &&
+        data.initiatorId in data.participantIds &&
+        data.recipientId in data.participantIds &&
+        data.initiatorName is string && data.initiatorName.size() >= 2 && data.initiatorName.size() <= 60 &&
+        data.recipientName is string && data.recipientName.size() >= 2 && data.recipientName.size() <= 60 &&
+        data.listingId is string && data.listingId.size() <= 128 &&
+        data.listingSummary is string && data.listingSummary.size() <= 120 &&
+        (!('initiatorWhatsapp' in data) || (data.initiatorWhatsapp is string && data.initiatorWhatsapp.size() <= 20)) &&
+        (!('recipientWhatsapp' in data) || (data.recipientWhatsapp is string && data.recipientWhatsapp.size() <= 20)) &&
+        data.lastMessage is string && data.lastMessage.size() <= 300 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderId', 'senderName', 'participantIds', 'body', 'createdAt']) &&
+        data.keys().hasOnly(['senderId', 'senderName', 'participantIds', 'body', 'createdAt']) &&
+        data.senderId is string && isValidId(data.senderId) &&
+        data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 60 &&
+        data.participantIds is list && data.participantIds.size() == 2 &&
+        data.participantIds[0] is string && isValidId(data.participantIds[0]) &&
+        data.participantIds[1] is string && isValidId(data.participantIds[1]) &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 500 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidVerificationRequest(data) {
+      return data.keys().hasAll([
+          'agentId', 'businessName', 'requestedLevel', 'commune',
+          'referenceNote', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'agentId', 'businessName', 'requestedLevel', 'commune',
+          'referenceNote', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.agentId is string && isValidId(data.agentId) &&
+        data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 60 &&
+        data.requestedLevel in ['community', 'certified'] &&
+        data.commune is string && data.commune.size() >= 2 && data.commune.size() <= 50 &&
+        data.referenceNote is string && data.referenceNote.size() >= 5 && data.referenceNote.size() <= 300 &&
+        data.status in ['pending', 'approved', 'rejected'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll(['reporterId', 'targetType', 'targetId', 'reason', 'details', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['reporterId', 'targetType', 'targetId', 'reason', 'details', 'status', 'createdAt']) &&
+        data.reporterId is string && isValidId(data.reporterId) &&
+        data.targetType in ['listing', 'agent'] &&
+        data.targetId is string && isValidId(data.targetId) &&
+        data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 80 &&
+        data.details is string && data.details.size() <= 400 &&
+        data.status in ['open', 'reviewed', 'resolved'] &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidFcmToken(data, agentId) {
+      return data.keys().hasAll(['uid', 'token', 'platform', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'token', 'platform', 'updatedAt']) &&
+        data.uid is string && data.uid == agentId && isValidId(data.uid) &&
+        data.token is string && data.token.size() >= 10 && data.token.size() <= 512 &&
+        data.platform is string && data.platform.size() >= 2 && data.platform.size() <= 40 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAlertRule(data, agentId) {
+      return data.keys().hasAll([
+          'agentId', 'commune', 'quartier', 'intent', 'liquidityType',
+          'minAmount', 'maxAmount', 'enabled', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'agentId', 'commune', 'quartier', 'intent', 'liquidityType',
+          'minAmount', 'maxAmount', 'enabled', 'createdAt', 'updatedAt'
+        ]) &&
+        data.agentId is string && data.agentId == agentId && isValidId(data.agentId) &&
+        data.commune is string && data.commune.size() >= 1 && data.commune.size() <= 50 &&
+        data.quartier is string && data.quartier.size() <= 60 &&
+        data.intent in ['all', 'offer', 'request'] &&
+        data.liquidityType in ['all', 'cash', 'uv', 'both'] &&
+        (data.minAmount is int || data.minAmount is float) && data.minAmount >= 0 && data.minAmount <= 25000000 &&
+        (data.maxAmount is int || data.maxAmount is float) && data.maxAmount >= data.minAmount && data.maxAmount <= 25000000 &&
+        data.enabled is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAgentNotification(data, agentId) {
+      return data.keys().hasAll([
+          'recipientId', 'listingId', 'title', 'body', 'commune',
+          'quartier', 'amount', 'intent', 'read', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'recipientId', 'listingId', 'title', 'body', 'commune',
+          'quartier', 'amount', 'intent', 'read', 'createdAt'
+        ]) &&
+        data.recipientId is string && data.recipientId == agentId && isValidId(data.recipientId) &&
+        data.listingId is string && isValidId(data.listingId) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 100 &&
+        data.body is string && data.body.size() >= 2 && data.body.size() <= 220 &&
+        data.commune is string && data.commune.size() >= 2 && data.commune.size() <= 50 &&
+        data.quartier is string && data.quartier.size() >= 2 && data.quartier.size() <= 60 &&
+        (data.amount is int || data.amount is float) && data.amount >= 500 && data.amount <= 25000000 &&
+        data.intent in ['offer', 'request'] &&
+        data.read is bool &&
+        data.createdAt is timestamp;
+    }
+
+    // 4. Collection Rules
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isAdmin();
+      allow write: if false;
+    }
+
+    match /agents_public/{agentId} {
+      allow get: if isValidId(agentId) && (existing().isPublic == true || isOwner(agentId) || isAdmin());
+      allow list: if existing().isPublic == true || (isSignedIn() && existing().uid == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser() &&
+        isValidId(agentId) &&
+        isOwner(agentId) &&
+        isValidAgentPublic(incoming(), agentId) &&
+        incoming().verificationLevel == 'standard' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(agentId) &&
+        isValidAgentPublic(incoming(), agentId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['verificationLevel', 'isPublic', 'updatedAt'])) ||
+          (
+            isOwner(agentId) &&
+            incoming().verificationLevel == existing().verificationLevel &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'businessName', 'commune', 'quartier', 'operators',
+              'isAvailable', 'isPublic', 'bio', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isAdmin() && isValidId(agentId);
+
+      match /private/contact {
+        allow get: if isValidId(agentId) && (isOwner(agentId) || isAdmin());
+        allow create: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isOwner(agentId) &&
+          isValidPrivateContact(incoming(), agentId) &&
+          incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isOwner(agentId) &&
+          isValidPrivateContact(incoming(), agentId) &&
+          incoming().uid == existing().uid &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['whatsapp', 'email', 'updatedAt']);
+      }
+
+      match /fcm_tokens/{tokenId} {
+        allow get: if isValidId(agentId) && isValidId(tokenId) && isOwner(agentId);
+        allow list: if isOwner(agentId) && existing().uid == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isValidId(tokenId) &&
+          isOwner(agentId) &&
+          isValidFcmToken(incoming(), agentId) &&
+          incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isValidId(tokenId) &&
+          isOwner(agentId) &&
+          isValidFcmToken(incoming(), agentId) &&
+          incoming().uid == existing().uid &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['token', 'platform', 'updatedAt']);
+        allow delete: if isVerifiedUser() && isValidId(agentId) && isValidId(tokenId) && isOwner(agentId);
+      }
+
+      match /alert_rules/{ruleId} {
+        allow get: if isValidId(agentId) && isValidId(ruleId) && isOwner(agentId);
+        allow list: if isOwner(agentId) && existing().agentId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isValidId(ruleId) &&
+          isOwner(agentId) &&
+          isValidAlertRule(incoming(), agentId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/agents_public/$(agentId));
+        allow update: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isValidId(ruleId) &&
+          isOwner(agentId) &&
+          isValidAlertRule(incoming(), agentId) &&
+          incoming().agentId == existing().agentId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'commune', 'quartier', 'intent', 'liquidityType',
+            'minAmount', 'maxAmount', 'enabled', 'updatedAt'
+          ]);
+        allow delete: if isVerifiedUser() && isValidId(agentId) && isValidId(ruleId) && isOwner(agentId);
+      }
+
+      match /notifications/{notifId} {
+        allow get: if isValidId(agentId) && isValidId(notifId) && isOwner(agentId);
+        allow list: if isOwner(agentId) && existing().recipientId == request.auth.uid;
+        allow create: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isValidId(notifId) &&
+          isOwner(agentId) &&
+          isValidAgentNotification(incoming(), agentId) &&
+          incoming().createdAt == request.time;
+        allow update: if isVerifiedUser() &&
+          isValidId(agentId) &&
+          isValidId(notifId) &&
+          isOwner(agentId) &&
+          isValidAgentNotification(incoming(), agentId) &&
+          incoming().recipientId == existing().recipientId &&
+          incoming().listingId == existing().listingId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+        allow delete: if isVerifiedUser() && isValidId(agentId) && isValidId(notifId) && isOwner(agentId);
+      }
+    }
+
+    match /listings/{listingId} {
+      allow get: if isValidId(listingId) && (
+        existing().status == 'active' ||
+        (isSignedIn() && existing().authorId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow list: if existing().status == 'active' ||
+        (isSignedIn() && existing().authorId == request.auth.uid) ||
+        isAdmin();
+      allow create: if isVerifiedUser() &&
+        isValidId(listingId) &&
+        isValidListing(incoming()) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().status == 'active' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/agents_public/$(request.auth.uid)) &&
+        incoming().authorVerification == get(/databases/$(database)/documents/agents_public/$(request.auth.uid)).data.verificationLevel;
+      allow update: if isVerifiedUser() &&
+        isValidId(listingId) &&
+        isValidListing(incoming()) &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+          (
+            existing().authorId == request.auth.uid &&
+            existing().status != 'closed' &&
+            incoming().authorVerification == existing().authorVerification &&
+            incoming().authorName == existing().authorName &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'details', 'liquidityType', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerifiedUser() &&
+        isValidId(listingId) &&
+        (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    match /conversations/{conversationId} {
+      allow get: if isSignedIn() && isValidId(conversationId) && (
+        request.auth.uid in existing().participantIds || isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        request.auth.uid in existing().participantIds || isAdmin()
+      );
+      allow create: if isVerifiedUser() &&
+        isValidId(conversationId) &&
+        isValidConversation(incoming()) &&
+        incoming().initiatorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/agents_public/$(incoming().recipientId));
+      allow update: if isVerifiedUser() &&
+        isValidId(conversationId) &&
+        isValidConversation(incoming()) &&
+        request.auth.uid in existing().participantIds &&
+        incoming().participantIds == existing().participantIds &&
+        incoming().initiatorId == existing().initiatorId &&
+        incoming().recipientId == existing().recipientId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            request.auth.uid == existing().initiatorId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'initiatorWhatsapp', 'updatedAt'])
+          ) ||
+          (
+            request.auth.uid == existing().recipientId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'recipientWhatsapp', 'updatedAt'])
+          )
+        );
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) && (
+          request.auth.uid in existing().participantIds || isAdmin()
+        );
+        allow list: if isSignedIn() && (
+          request.auth.uid in existing().participantIds || isAdmin()
+        );
+        allow create: if isVerifiedUser() &&
+          isValidId(conversationId) &&
+          isValidId(messageId) &&
+          isValidMessage(incoming()) &&
+          incoming().senderId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds &&
+          incoming().participantIds == get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+      }
+    }
+
+    match /verification_requests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) && (
+        existing().agentId == request.auth.uid || isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().agentId == request.auth.uid || isAdmin()
+      );
+      allow create: if isVerifiedUser() &&
+        isValidId(requestId) &&
+        isValidVerificationRequest(incoming()) &&
+        incoming().agentId == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/agents_public/$(request.auth.uid));
+      allow update: if isAdmin() &&
+        isValidId(requestId) &&
+        isValidVerificationRequest(incoming()) &&
+        existing().status == 'pending' &&
+        incoming().agentId == existing().agentId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+    }
+
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (
+        existing().reporterId == request.auth.uid || isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        existing().reporterId == request.auth.uid || isAdmin()
+      );
+      allow create: if isVerifiedUser() &&
+        isValidId(reportId) &&
+        isValidReport(incoming()) &&
+        incoming().reporterId == request.auth.uid &&
+        incoming().status == 'open' &&
+        incoming().createdAt == request.time;
+      allow update: if isAdmin() &&
+        isValidId(reportId) &&
+        isValidReport(incoming()) &&
+        existing().status != 'resolved' &&
+        incoming().reporterId == existing().reporterId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+    }
+  }
+}
